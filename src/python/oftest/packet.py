@@ -42,6 +42,14 @@ import binascii
 import string
 import collections #@UnresolvedImport
 import oftest.action as action
+#Import scappy packet generator
+try:
+    import scapy.all as scapy
+except:
+    try:
+        import scapy as scapy
+    except:
+        sys.exit("Need to install scapy for packet parsing")
 
 ETHERTYPE_IP = 0x0800
 ETHERTYPE_VLAN = 0x8100
@@ -133,6 +141,55 @@ class Packet(object):
 
     def __len__(self):
         return len(self.data)
+
+    def simple_rtp_packet(self,
+                          pktlen=60, 
+                          dl_dst='aa:bb:cc:dd:ee:ff',
+                          dl_src='aa:bb:cc:dd:ee:ef',
+                          dl_vlan_enable=False,
+                          dl_vlan=0,
+                          dl_vlan_pcp=0,
+                          dl_vlan_cfi=0,
+                          ip_src='192.168.0.1',
+                          ip_dst='192.168.0.2',
+                          ip_tos=0,
+                          tcp_sport=0,
+                          tcp_dport=0, 
+                          rtp_sequence=0
+                          ):
+
+        """
+        Return a simple dataplane RTP packet 
+
+        Supports a few parameters:
+        @param len Length of packet in bytes w/o CRC
+        @param dl_dst Destinatino MAC
+        @param dl_src Source MAC
+        @param dl_vlan_enable True if the packet is with vlan, False otherwise
+        @param dl_vlan VLAN ID
+        @param dl_vlan_pcp VLAN priority
+        @param ip_src IPv4 source
+        @param ip_dst IPv4 destination
+        @param ip_tos IP ToS
+        @param tcp_dport TCP destination port
+        @param tcp_sport TCP source port
+
+        Generates a simple RTP request.  Users
+        shouldn't assume anything about this packet other than that
+        it is a valid ethernetat/IP/TCP frame.
+        """
+        # Note Dot1Q.id is really CFI
+        
+        self.data = ""
+        self.data = str(scapy.Ether(dst=dl_dst, src=dl_src)/ \
+                scapy.IP(dst=ip_dst, src=ip_src)/ \
+                scapy.UDP(sport=tcp_sport,dport=tcp_dport)/ \
+                scapy.RTP(sequence=rtp_sequence))
+
+
+        self.data += ("\0" * (pktlen - len(self.data)))
+
+        return self
 
     def simple_tcp_packet(self,
                           pktlen=100, 

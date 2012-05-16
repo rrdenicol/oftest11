@@ -100,8 +100,16 @@ def create_action(**kwargs):
     if a == ofp.OFPAT_SET_TP_SRC:
         act = action.action_set_tp_src()
         act.tp_port = kwargs.get('tp_port', 0)
-        return act;
-
+        return act
+    if a == ofp.OFPAT_SET_DL_DST:
+        act = action.action_set_dl_dst()
+        dl_tmp = kwargs.get('dl_dst', 1)
+        act.dl_addr = parse.parse_mac(dl_tmp)
+        return act
+    if a == ofp.OFPAT_SET_NW_DST:
+        act = action.action_set_nw_dst()
+        act.nw_addr = parse.parse_ip(kwargs.get('nw_dst', '192.168.3.1' ))
+        return act
 
 
 def create_flow_msg(packet = None, in_port = None, match = None, apply_action_list = []):

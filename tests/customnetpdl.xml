@@ -4590,7 +4590,7 @@ Please note: it was this before
 			</loop>
 		</block>
 
-		<block name="FH" longname="{2,32} 544 Fragment Header">
+		<block name="FH" longname="{2,32}">
 			<field type="fixed" name="nexthdr" longname="Next Header" size="1" showtemplate="ipv6.nexthdr"/>
 			<field type="fixed" name="reserved" longname="Reserved (multiple of 8 bytes)" comment="This is in multiple of 8 bytes" size="1" showtemplate="FieldDec"/>
 			<field type="bit" name="fragment offset" longname="Fragment Offset" mask="0xFFF0" size="2" showtemplate="FieldDec"/>
@@ -4599,7 +4599,7 @@ Please note: it was this before
 			<field type="fixed" name="identification" longname="Identification" size="4" showtemplate="FieldDec"/>
 		</block>
 
-		<block name="AH" longname="{2,40} 552 Authentication Header">
+		<block name="AH" longname="{2,40}">
 			<field type="fixed" name="nexthdr" longname="Next Header" size="1" showtemplate="ipv6.nexthdr"/>
 			<field type="fixed" name="payload len" longname="Payload Len" size="1" showtemplate="FieldDec"/>
 			<field type="fixed" name="reserved" longname="Reserved" size="2" showtemplate="FieldDec"/>
@@ -4607,7 +4607,7 @@ Please note: it was this before
 			<field type="fixed" name="snf" longname="Sequence Number Field" size="4" showtemplate="FieldDec"/>
 		</block>
 
-		<block name="DOH" longname="{2,16} 272 Destination Option Header">
+		<block name="DOH" longname="{2,16}">
 			<field type="fixed" name="nexthdr" longname="Next Header" size="1" showtemplate="ipv6.nexthdr"/>
 			<field type="fixed" name="helen" longname="Length (multiple of 8 bytes, not including the first 8)" size="1" showtemplate="ipv6.hbhlen"/>
 			<loop type="size" expr="(buf2int(helen) * 8)+6"> <!-- '6' because the first two bytes are nexthdr and helen -->
@@ -4615,7 +4615,7 @@ Please note: it was this before
 			</loop>
 		</block>
 
-		<block name="RH" longname="{2,24} 280 Routing Header">
+		<block name="RH" longname="{2,24}">
 			<field type="fixed" name="nexthdr" longname="Next Header" size="1" showtemplate="ipv6.nexthdr"/>
 			<field type="fixed" name="hlen" longname="Length (multiple of 8 bytes)" comment="This is in multiple of 8 bytes" size="1" showtemplate="FieldDec"/>	
 			<field type="fixed" name="rtype" longname="Routing Type" size="1" showtemplate="FieldDec"/>
@@ -4625,7 +4625,7 @@ Please note: it was this before
 			<switch expr="buf2int(rtype)">
 				<case value="0">
 					<loop type="times2repeat" expr="(buf2int(hlen) div 2)">
-						<field type="fixed" name="address" longname="{2,25} 281 Address" size="16" showtemplate="ip6addr"/>
+						<field type="fixed" name="address" longname="{2,25}" size="16" showtemplate="ip6addr"/>
 					</loop>
 				</case>
 				<default>
@@ -4639,7 +4639,7 @@ Please note: it was this before
 			<field type="fixed" name="opttype" longname="Option Type" size="1" showtemplate="ipv6.opttype">
 				<field type="bit" name="act" longname="Action (action if Option Type is unrecognized)" mask="0xC0" size="1" showtemplate="ipv6.optact"/> 
 				<field type="bit" name="chg" longname="Change (whether or not option data can change while packet is en-route)" mask="0x20" size="1" showtemplate="ipv6.optchg"/> 
-				<field type="bit" name="res" longname="{2,17} 273 Option Code" mask="0x1F" size="1" showtemplate="FieldDec"/> 
+				<field type="bit" name="res" longname="{2,17}" mask="0x1F" size="1" showtemplate="FieldDec"/> 
 			</field>
 
 			<switch expr="buf2int(opttype)">

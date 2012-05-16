@@ -95,7 +95,7 @@ def test_set_init(config):
     pa_config = config
 
 # chesteve: IPv6 packet gen
-def simple_ipv6_packet(pktlen=1000, 
+def simple_ipv6_packet(pktlen=100, 
                       dl_dst='00:01:02:03:04:05',
                       dl_src='00:06:07:08:09:0a',
                       dl_vlan_enable=False,
@@ -153,6 +153,54 @@ def simple_ipv6_packet(pktlen=1000,
 
     return pkt
 
+def simple_rtp_packet(pktlen=60, 
+                      dl_dst='aa:bb:cc:dd:ee:ff',
+                      dl_src='aa:bb:cc:dd:ee:ef',
+                      dl_vlan_enable=False,
+                      dl_vlan=0,
+                      dl_vlan_pcp=0,
+                      dl_vlan_cfi=0,
+                      ip_src='192.168.0.1',
+                      ip_dst='192.168.0.2',
+                      ip_tos=0,
+                      tcp_sport=0,
+                      tcp_dport=0, 
+                      ):
+
+    """
+    Return a simple dataplane IPv6 packet 
+
+    Supports a few parameters:
+    @param len Length of packet in bytes w/o CRC
+    @param dl_dst Destinatino MAC
+    @param dl_src Source MAC
+    @param dl_vlan_enable True if the packet is with vlan, False otherwise
+    @param dl_vlan VLAN ID
+    @param dl_vlan_pcp VLAN priority
+    @param ip_src IPv6 source
+    @param ip_dst IPv6 destination
+    @param ip_tos IP ToS
+    @param tcp_dport TCP destination port
+    @param ip_sport TCP source port
+
+    Generates a simple TCP request.  Users
+    shouldn't assume anything about this packet other than that
+    it is a valid ethernetat/IP/TCP frame.
+    """
+    # Note Dot1Q.id is really CFI
+    
+    pkt = scapy.Ether(dst=dl_dst, src=dl_src)/ \
+            scapy.IP(dst=ip_dst, src=ip_src)/ \
+            scapy.UDP(sport=21000,dport=21000)/ \
+            scapy.RTP(sequence=55)
+
+
+    pkt = pkt/("\0" * (pktlen - len(pkt)))
+
+    return pkt
+
+
+
 def nxm_send_flow_mod_add(flow_match,flow_acts,logger):
     """
     Send a flow mod with the nxm operation mode
@@ -203,6 +251,22 @@ def request_flow_stats():
 
 
 # TESTS
+class SimpleRTP(basic.SimpleDataPlane):
+
+    def runTest(self):
+        
+        of_ports = pa_port_map.keys()
+        of_ports.sort()
+        ing_port = of_ports[0]
+        egr_port = of_ports[3]
+        
+        pkt = simple_rtp_packet()
+        pa_logger.info("Sending RTP packet [" + str(pkt) +"] to " + str(ing_port))
+        
+        self.dataplane.send(ing_port, str(pkt))
+        
+        
+
 class MatchIPv4Simple(basic.SimpleDataPlane):
     """
     Just send a packet IPv4 / TCP thru the switch

@@ -112,6 +112,32 @@ def clear_port_config(parent, port, logger):
                          0, 0, logger)
     parent.assertEqual(rv, 0, "Failed to reset port config")
 
+def simple_rtp_packet(**args):
+    """
+    Return a simple dataplane TCP packet
+
+    Supports a few parameters:
+    @param len Length of packet in bytes w/o CRC
+    @param dl_dst Destinatino MAC
+    @param dl_src Source MAC
+    @param dl_vlan_enable True if the packet is with vlan, False otherwise
+    @param dl_vlan_type Ether type for VLAN
+    @param dl_vlan VLAN ID
+    @param dl_vlan_pcp VLAN priority
+    @param ip_src IP source
+    @param ip_dst IP destination
+    @param ip_tos IP ToS
+    @param tcp_dport TCP destination port
+    @param tcp_sport TCP source port
+
+    Generates a simple TCP request.  Users
+    shouldn't assume anything about this packet other than that
+    it is a valid ethernet/IP/TCP frame.
+    """
+    # Note Dot1Q.id is really CFI
+
+    return Packet().simple_rtp_packet(**args)
+
 def simple_tcp_packet(**args):
     """
     Return a simple dataplane TCP packet
