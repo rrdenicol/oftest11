@@ -138,7 +138,7 @@ class NewTest(basic.SimpleDataPlane):
             rtp_logger.info("Sending packet to dp port " + 
                                str(ingress_port))
             self.dataplane.send(ingress_port, str(pkt))
-#            if idx%2 == :
+#            if idx%2 == 0:
             
             idx = idx + 1
 #            yes_ports = set([egress_port1, egress_port2])
@@ -150,7 +150,126 @@ class NewTest(basic.SimpleDataPlane):
         testutils.delete_all_groups(self.controller, rtp_logger)
         
         
+class ThreeGroups(basic.SimpleDataPlane):
+    """
+    Insert a flow
+
+    Three groups with several action buckets
+    """
+    def send_ctrl_exp_noerror(self, msg, log = ''):
+        rtp_logger.info('Sending message ' + log)
+        rtp_logger.debug(msg.show())
+        rv = self.controller.message_send(msg)
+        self.assertTrue(rv != -1, 'Error sending!')
+
+        rtp_logger.info('Waiting for error messages...')
+        (response, raw) = self.controller.poll(ofp.OFPT_ERROR, 1)
+
+        self.assertTrue(response is None, 'Unexpected error message received')
+
+        testutils.do_barrier(self.controller);
+    def runTest(self):
+    
+        of_ports = rtp_port_map.keys()
+        of_ports.sort()
+        ing_port = of_ports[0]
+        egr_port = of_ports[3]
         
+        rtp_logger.info("Running " + str(self))
+        
+        rtp_logger.info("Removing all flows")
+        testutils.delete_all_flows(self.controller, rtp_logger)
+        testutils.delete_all_groups(self.controller, rtp_logger)
+        
+        group_add_msg = \
+        groups.create_group_mod_msg(ofp.OFPGC_ADD, ofp.OFPGT_ALL, group_id = 40, buckets = [
+            groups.create_bucket(0, 0, 0, [
+                groups.create_action(action= ofp.OFPAT_OUTPUT, port= of_ports[1])
+            ]) ,
+            groups.create_bucket(0, 0, 0, [
+                groups.create_action(action= ofp.OFPAT_SET_DL_DST, dl_dst='00:00:00:00:00:02'),
+                groups.create_action(action= ofp.OFPAT_SET_NW_DST, nw_dst='192.168.2.1'),
+                groups.create_action(action= ofp.OFPAT_OUTPUT, port= of_ports[2])
+            ]) ,
+            groups.create_bucket(0, 0, 0, [
+                groups.create_action(action= ofp.OFPAT_SET_DL_DST, dl_dst='00:00:00:00:00:03'),
+                groups.create_action(action= ofp.OFPAT_SET_NW_DST, nw_dst='192.168.3.1'),
+                groups.create_action(action= ofp.OFPAT_OUTPUT, port= of_ports[3])
+            ]) 
+        ])
+
+        self.send_ctrl_exp_noerror(group_add_msg, 'group add')
+
+        group_add_msg = \
+        groups.create_group_mod_msg(ofp.OFPGC_ADD, ofp.OFPGT_ALL, group_id = 10, buckets = [
+            groups.create_bucket(0, 0, 0, [
+                groups.create_action(action= ofp.OFPAT_OUTPUT, port= of_ports[1])
+            ]) ,
+            groups.create_bucket(0, 0, 0, [
+                groups.create_action(action= ofp.OFPAT_SET_DL_DST, dl_dst='00:00:00:00:00:02'),
+                groups.create_action(action= ofp.OFPAT_SET_NW_DST, nw_dst='192.168.2.1'),
+                groups.create_action(action= ofp.OFPAT_OUTPUT, port= of_ports[2])
+            ]) 
+        ])
+
+        self.send_ctrl_exp_noerror(group_add_msg, 'group add')
+        
+        group_add_msg = \
+        groups.create_group_mod_msg(ofp.OFPGC_ADD, ofp.OFPGT_ALL, group_id = 20, buckets = [
+            groups.create_bucket(0, 0, 0, [
+                groups.create_action(action= ofp.OFPAT_OUTPUT, port= of_ports[1])
+            ]) 
+        ])
+
+        self.send_ctrl_exp_noerror(group_add_msg, 'group add')
+        
+        group_add_msg = \
+        groups.create_group_mod_msg(ofp.OFPGC_ADD, ofp.OFPGT_SELECT, group_id = 30, buckets = [
+            groups.create_bucket(1, 0, 0, [
+                groups.create_action(action= ofp.OFPAT_GROUP, group_id = 10)
+            ]) ,
+            groups.create_bucket(1, 0, 0, [
+                groups.create_action(action= ofp.OFPAT_GROUP, group_id = 20)
+            ]) ,
+            groups.create_bucket(1, 0, 0, [
+                groups.create_action(action= ofp.OFPAT_GROUP, group_id = 40)
+            ])
+        ])
+
+        self.send_ctrl_exp_noerror(group_add_msg, 'group add')
+        
+        request = message.flow_mod()
+
+        pkt = testutils.simple_rtp_packet(ip_dst= '192.168.1.1')
+        # Gerar o flow_mod em cima do pacote RTP (desconsidera a sequencia do RTP)
+        flow_add_msg = \
+        groups.create_flow_msg(packet = pkt, in_port = of_ports[0], apply_action_list = [
+            groups.create_action(action = ofp.OFPAT_GROUP, group_id = 30),
+        ])
+        
+        rv = self.controller.message_send(flow_add_msg)
+        self.assertTrue(rv != -1, "Error installing flow mod")
+        
+        idx = 0
+        
+        while idx < 90 :
+            ingress_port = of_ports[0]
+            
+            pkt = testutils.simple_rtp_packet(ip_dst= '192.168.1.1', rtp_sequence= idx)
+            
+            rtp_logger.info("Sending packet to dp port " + 
+                               str(ingress_port))
+            self.dataplane.send(ingress_port, str(pkt))
+#            if idx%2 == 0:
+            
+            idx = idx + 1
+#            yes_ports = set([egress_port1, egress_port2])
+#            no_ports = set(of_ports).difference(yes_ports)
+
+#            testutils.receive_pkt_check(self.dataplane, pkt, yes_ports, no_ports, self, rtp_logger)
+
+        testutils.delete_all_flows(self.controller, rtp_logger)
+        testutils.delete_all_groups(self.controller, rtp_logger)
         
 if __name__ == "__main__":
     print "Please run through oft script:  ./oft --test-spec=newtest"
