@@ -138,7 +138,7 @@ class NewTest(basic.SimpleDataPlane):
             rtp_logger.info("Sending packet to dp port " + 
                                str(ingress_port))
             self.dataplane.send(ingress_port, str(pkt))
-            if idx%2 == :
+#            if idx%2 == :
             
             idx = idx + 1
 #            yes_ports = set([egress_port1, egress_port2])
