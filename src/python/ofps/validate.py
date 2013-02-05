@@ -7,7 +7,7 @@ import logging
 
 from oftest import cstruct as ofp, packet
 from oftest import ofutils
-from oftest.cstruct import OFPML_NONE
+# from oftest.cstruct import OFPML_NONE
 
 
 def validate_flow_mod(switch, flow_mod):
@@ -256,7 +256,7 @@ def _validate_match_vlan(match, flow_mod, logger):
 ########### Actual tests
 def _test_mpls_label(mpls_label):
     
-    if mpls_label == ofp.OFPML_ANY or mpls_label == OFPML_NONE:
+    if mpls_label == ofp.OFPML_ANY or mpls_label == ofp.OFPML_NONE:
         return True
     if mpls_label < 0 or mpls_label > 0x0fffff:
         return False

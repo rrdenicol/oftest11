@@ -1,0 +1,164 @@
+<config xmlns="http://tail-f.com/ns/config/1.0">
+  <config xmlns="http://cpqd.com.br/chassis/system">
+  <system>
+  <roadm xmlns="http://cpqd.com.br/roadm/system">
+    <wdm-interface>
+      <interface>
+        <name>D1-ADD</name>
+        <description>Degree D1: at interface: WSS1.ADD</description>
+        <type>g870_OCG</type>
+        <direction>IN</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>1</slot-ref>
+        <interface-ref>ADD</interface-ref>
+      </interface>
+      <interface>
+        <name>D1-DROP</name>
+        <description>Degree D1: at interface: WSS1.DROP</description>
+        <type>g870_OCG</type>
+        <direction>OUT</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>1</slot-ref>
+        <interface-ref>DROP</interface-ref>
+      </interface>
+      <interface>
+        <name>D1-IN</name>
+        <description>Degree D1: at interface: WSS1.LINE-IN</description>
+        <type>g870_OCG</type>
+        <direction>IN</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>1</slot-ref>
+        <interface-ref>LINE-IN</interface-ref>
+      </interface>
+      <interface>
+        <name>D1-OUT</name>
+        <description>Degree D1: at interface: WSS1.LINE-OUT</description>
+        <type>g870_OCG</type>
+        <direction>OUT</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>1</slot-ref>
+        <interface-ref>LINE-OUT</interface-ref>
+      </interface>
+      <interface>
+        <name>D2-ADD</name>
+        <description>Degree D2: at interface: WSS2.ADD</description>
+        <type>g870_OCG</type>
+        <direction>IN</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>2</slot-ref>
+        <interface-ref>ADD</interface-ref>
+      </interface>
+      <interface>
+        <name>D2-DROP</name>
+        <description>Degree D2: at interface: WSS2.DROP</description>
+        <type>g870_OCG</type>
+        <direction>OUT</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>2</slot-ref>
+        <interface-ref>DROP</interface-ref>
+      </interface>
+      <interface>
+        <name>D2-IN</name>
+        <description>Degree D2: at interface: WSS2.LINE-IN</description>
+        <type>g870_OCG</type>
+        <direction>IN</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>2</slot-ref>
+        <interface-ref>LINE-IN</interface-ref>
+      </interface>
+      <interface>
+        <name>D2-OUT</name>
+        <description>Degree D2: at interface: WSS2.LINE-OUT</description>
+        <type>g870_OCG</type>
+        <direction>OUT</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>2</slot-ref>
+        <interface-ref>LINE-OUT</interface-ref>
+      </interface>
+      <interface>
+        <name>D3-ADD</name>
+        <description>Degree D3: at interface: WSS3.ADD</description>
+        <type>g870_OCG</type>
+        <direction>IN</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>3</slot-ref>
+        <interface-ref>ADD</interface-ref>
+      </interface>
+      <interface>
+        <name>D3-DROP</name>
+        <description>Degree D3: at interface: WSS3.DROP</description>
+        <type>g870_OCG</type>
+        <direction>OUT</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>3</slot-ref>
+        <interface-ref>DROP</interface-ref>
+      </interface>
+      <interface>
+        <name>D3-IN</name>
+        <description>Degree D3: at interface: WSS3.LINE-IN</description>
+        <type>g870_OCG</type>
+        <direction>IN</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>3</slot-ref>
+        <interface-ref>LINE-IN</interface-ref>
+      </interface>
+      <interface>
+        <name>D3-OUT</name>
+        <description>Degree D3: at interface: WSS3.LINE-OUT</description>
+        <type>g870_OCG</type>
+        <direction>OUT</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>3</slot-ref>
+        <interface-ref>LINE-OUT</interface-ref>
+      </interface>
+      <interface>
+        <name>D4-ADD</name>
+        <description>Degree D4: at interface: WSS4.ADD</description>
+        <type>g870_OCG</type>
+        <direction>IN</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>4</slot-ref>
+        <interface-ref>ADD</interface-ref>
+      </interface>
+      <interface>
+        <name>D4-DROP</name>
+        <description>Degree D4: at interface: WSS4.DROP</description>
+        <type>g870_OCG</type>
+        <direction>OUT</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>4</slot-ref>
+        <interface-ref>DROP</interface-ref>
+      </interface>
+      <interface>
+        <name>D4-IN</name>
+        <description>Degree D4: at interface: WSS4.LINE-IN</description>
+        <type>g870_OCG</type>
+        <direction>IN</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>4</slot-ref>
+        <interface-ref>LINE-IN</interface-ref>
+      </interface>
+      <interface>
+        <name>D4-OUT</name>
+        <description>Degree D4: at interface: WSS4.LINE-OUT</description>
+        <type>g870_OCG</type>
+        <direction>OUT</direction>
+        <chassis-ref>1</chassis-ref>
+        <slot-ref>4</slot-ref>
+        <interface-ref>LINE-OUT</interface-ref>
+      </interface>
+    </wdm-interface>
+    <grid>
+      <grid_channels>
+        <channel>1</channel>
+        <!-- <m>4</m> -->
+        <band>BAND_C</band>
+        <central-freq-value>0</central-freq-value>
+        <bound-lower>193075000</bound-lower>
+        <bound-upper>193125000</bound-upper>
+      </grid_channels>
+    </grid>
+  </roadm>
+  </system>
+  </config>
+</config>

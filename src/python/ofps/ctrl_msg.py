@@ -187,6 +187,58 @@ def features_request(switch, msg, rawmsg):
     rep.ports = switch.ports.values()
     switch.controller.message_send(rep)
 
+import read as read_it
+import xml.etree.ElementTree as et
+# def getFullNcsName(tag):
+#     return "{http://cpqd.com.br/drc/gso/ng/ncs/interface}%s" % (tag)
+
+def getFullRoadmName(tag):
+    return "{http://cpqd.com.br/roadm/system}%s" % (tag)
+
+port_to_name_map = {
+    0   : '0',
+    1   : 'D1-ADD',
+    2   : 'D2-ADD',
+    3   : 'D3-ADD',
+    4   : 'D4-ADD',
+    257 : 'D1-DROP',
+    258 : 'D2-DROP',
+    259 : 'D3-DROP',
+    260 : 'D4-DROP',
+    513 : 'D1-IN',
+    514 : 'D2-IN',
+    515 : 'D3-IN',
+    516 : 'D4-IN',
+    769 : 'D1-OUT',
+    770 : 'D2-OUT',
+    771 : 'D3-OUT',
+    772 : 'D4-OUT',
+    ofp.OFPP_ANY : 'ANY'
+}
+
+cc_instance_map = {
+    
+}
+
+cc_port_used = {
+    1   : 0,
+    2   : 0,
+    3   : 0,
+    4   : 0,
+    257 : 0,
+    258 : 0,
+    259 : 0,
+    260 : 0,
+    513 : 0,
+    514 : 0,
+    515 : 0,
+    516 : 0,
+    769 : 0,
+    770 : 0,
+    771 : 0,
+    772 : 0
+}
+
 def flow_mod(switch, msg, rawmsg):
     """
     Process a flow_mod message from the controller
@@ -194,11 +246,25 @@ def flow_mod(switch, msg, rawmsg):
     @param msg The parsed message object of type flow_mod
     @param rawmsg The actual packet received as a string
     """
-    (rv, err_msg) = switch.pipeline.flow_mod_process(msg, switch.groups)
-    switch.logger.debug("Handled flow_mod, result: " + str(rv) + ", " +
-                        "None" if err_msg is None else err_msg.__class__.__name__)
-    if rv !=  0:
-        switch.controller.message_send(err_msg)
+
+    if msg.out_port in port_to_name_map.keys() and  msg.match.in_port in port_to_name_map.keys()  \
+       and cc_port_used[msg.out_port] == 0 and  cc_port_used[msg.match.in_port] == 0 :
+        cc_label = port_to_name_map[msg.match.in_port] + '_' + port_to_name_map[msg.out_port] + '_' + str(msg.match.dl_vlan)
+        print "LABEL = " + cc_label
+        read_it.writeToConfd('127.0.0.1', 2022, 'admin', 'admin', cc_label, 
+            str(msg.match.dl_vlan) , 
+            port_to_name_map[msg.match.in_port], 
+            port_to_name_map[msg.out_port])
+        cc_port_used[msg.match.in_port] = 1
+        cc_port_used[msg.out_port] = 1
+
+    else :
+        print ""
+    # (rv, err_msg) = switch.pipeline.flow_mod_process(msg, switch.groups)
+    # switch.logger.debug("Handled flow_mod, result: " + str(rv) + ", " +
+    #                     "None" if err_msg is None else err_msg.__class__.__name__)
+    # if rv !=  0:
+    #     switch.controller.message_send(err_msg)
 
 def flow_mod_failed_error_msg(switch, msg, rawmsg):
     """
@@ -234,13 +300,62 @@ def flow_stats_request(switch, msg, rawmsg):
     @param msg The parsed message object of type flow_stats_request
     @param rawmsg The actual packet received as a string
     """
-    switch.logger.debug("Received flow_stats_request from controller")
-    reply = switch.pipeline.flow_stats_get(msg,switch.groups)
-    if not reply : 
-        switch.logger.error("Got None reply from switch.pipeline.flow_stats_get(); dropping request")
-    else:
-        switch.logger.debug("Sending flow_stats_response to controller")
-        switch.controller.message_send(reply)
+    ns1 = "http://cpqd.com.br/chassis/system"
+    ns2 = "http://cpqd.com.br/roadm/system"
+    # ns3 = 
+    # datafilter = ("xpath","/{{{0}}}config/{{{0}}}system/{{{1}}}roadm".format(ns1 , ns2))
+    datafilter = ("xpath","/config/system/roadm/cross-connections")
+    config = read_it.readFromConfd('127.0.0.1', 2022, 'admin', 'admin',  datafilter)
+    root = et.fromstring(config)
+    # print "ROOT == " + root
+
+    inp = port_to_name_map[msg.match.in_port]
+    outp = port_to_name_map[msg.out_port]
+    channel = str(msg.match.dl_vlan)
+
+    replies = []
+
+    for k in root.iter(getFullRoadmName('cross-connection')):
+        rin = ''
+        rout = ''
+        rch = ''
+        stats = []
+        for i in k.iter(getFullRoadmName('in')):
+            rin = i.text
+        for i in k.iter(getFullRoadmName('out')):
+            rout = i.text
+        for i in k.iter(getFullRoadmName('cc-channel')):
+            rch = i.text
+        
+        print 'checking:'
+        print "in: %s out: %s channel: %s" % (rin, rout, rch)
+        print 'against:'
+        print "in: %s out: %s channel: %s" % (inp, outp, channel)
+        if (rin == inp) & (rout == outp) & (rch == channel) :
+            print "FOUND" 
+
+            print "DO whatever "
+            return
+        elif (inp == port_to_name_map[0] )& (outp == port_to_name_map[ofp.OFPP_ANY] )& (channel == '0' ):
+            print "Add response : "
+            stat = message.flow_stats_entry()
+            # stat.match.in_port = 
+
+
+    reply = message.flow_stats_reply()
+    reply.header.xid = flow_stats_request.header.xid
+    reply.stats = replies
+    switch.logger.debug("Sending flow_stats_response to controller")    
+    switch.controller.message_send(reply)
+    
+
+    # switch.logger.debug("Received flow_stats_request from controller")
+    # reply = switch.pipeline.flow_stats_get(msg,switch.groups)
+    # if not reply : 
+    #     switch.logger.error("Got None reply from switch.pipeline.flow_stats_get(); dropping request")
+    # else:
+    #     switch.logger.debug("Sending flow_stats_response to controller")
+    #     switch.controller.message_send(reply)
 
 def get_config_reply(switch, msg, rawmsg):
     """

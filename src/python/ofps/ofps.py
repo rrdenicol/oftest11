@@ -45,6 +45,8 @@ import struct
 from threading import Thread
 from optparse import OptionParser
 import pdb
+import time
+
 
 import oftest.cstruct as ofp
 import oftest.dataplane as dataplane
@@ -225,12 +227,16 @@ class OFSwitch(Thread):
             self.ports[of_port]=port
         # Register to receive all controller packets
         self.controller.register("all", self.ctrl_pkt_handler, calling_obj=self)
+        self.controller.daemon = True
         self.controller.start()
         self.logger.info("Controller started")
 
         # Process packets when they arrive
         self.logger.info("Entering packet processing loop")
+        sleep_time = 1
         while True:
+            # time.sleep(sleep_time)
+
             (of_port, data, recv_time) = self.dataplane.poll(timeout=5)
             if not self.controller.isAlive():
                 # @todo Implement fail open/closed
@@ -264,6 +270,14 @@ class OFSwitch(Thread):
     
     def version(self):
         return OFSwitch.VERSION
+
+    def sigint_handler(signum, frame):
+        self.dataplane.kill()
+        self.controller.kill()
+        self.pipeline.join()
+        self.controller.join()
+
+        sys.exit()
 
 class GroupTable(object):
     """

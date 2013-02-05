@@ -167,7 +167,7 @@ class FlowTable(object):
                     self.logger.debug("Updating flow " + str(flow.flow_mod.cookie))
                     flow.flow_mod_set(flow_mod)
         else:
-            ret = (-1, ofp.OFPFMFC_BAD_MATCH) 
+            ret = (-1, ofp.OFPET_BAD_MATCH) 
         self.flow_sync.release()
         return ret
 
@@ -183,7 +183,7 @@ class FlowTable(object):
             self.flow_entries.remove(flow)
             del_count+=1
         if del_count == 0:
-            ret = (-1, ofp.OFPFMFC_BAD_MATCH) 
+            ret = (-1, ofp.OFPET_BAD_MATCH) 
         self.flow_sync.release()
         return ret
 

@@ -518,6 +518,7 @@ def flow_msg_create(parent, pkt, ing_port=0, instruction_list=None,
         act = action.action_output()
         act.port = egr_port
         action_list.append(act)
+        request.out_port = egr_port
         
     inst = None
     if len(instruction_list) == 0: 
