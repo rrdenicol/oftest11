@@ -15,374 +15,347 @@ for filters should include a callback or a counter
 """
 
 import sys
-#import os
+import os
 import socket
 import time
-import netutils
-from threading import Thread
-#from threading import Lock
-from threading import Condition
-import select #@UnresolvedImport
+import select
 import logging
-from oft_assert import oft_assert
+from threading import Thread
+from threading import Lock
+from threading import Condition
+import ofutils
+import netutils
 
-##@todo Find a better home for these identifiers (dataplane)
-RCV_SIZE_DEFAULT = 4096
-ETH_P_ALL = 0x03
-RCV_TIMEOUT = 10000
+have_pypcap = False
+try:
+    import pcap
+    if hasattr(pcap, "pcap"):
+        # the incompatible pylibpcap library masquerades as pcap
+        have_pypcap = True
+except:
+    pass
 
-class DataPlanePort(Thread):
+def match_exp_pkt(exp_pkt, pkt):
     """
-    Class defining a port monitoring object.
+    Compare the string value of pkt with the string value of exp_pkt,
+    and return True iff they are identical.  If the length of exp_pkt is
+    less than the minimum Ethernet frame size (60 bytes), then padding
+    bytes in pkt are ignored.
+    """
+    e = str(exp_pkt)
+    p = str(pkt)
+    if len(e) < 60:
+        p = p[:len(e)]
+    return e == p
 
-    Control a dataplane port connected to the switch under test.
-    Creates a promiscuous socket on a physical interface.
-    Queues the packets received on that interface with time stamps.
-    Inherits from Thread class as meant to run in background.  Also
-    supports polling.
-    Use accessors to dequeue packets for proper synchronization.
 
-    Currently assumes a controlling 'parent' which maintains a
-    common Lock object and a total packet-pending count.  May want
-    to decouple that some day.
+class DataPlanePort:
+    """
+    Uses raw sockets to capture and send packets on a network interface.
     """
 
-    def __init__(self, interface_name, port_number, parent, max_pkts=1024):
+    RCV_SIZE_DEFAULT = 4096
+    ETH_P_ALL = 0x03
+    RCV_TIMEOUT = 10000
+
+    def __init__(self, interface_name, port_number):
         """
-        Set up a port monitor object
         @param interface_name The name of the physical interface like eth1
-        @param port_number The port number associated with this port
-        @param parent The controlling dataplane object; for pkt wait CV
-        @param max_pkts Maximum number of pkts to keep in queue
         """
-        Thread.__init__(self)
         self.interface_name = interface_name
-        self.max_pkts = max_pkts
-        self.packets_total = 0
-        self.packets = []
-        self.packets_discarded = 0
-        self.port_number = port_number
-        logname = "dp-" + interface_name
-        self.logger = logging.getLogger(logname)
-        try:
-            self.socket = self.interface_open(interface_name)
-        except StandardError:
-            self.logger.info("Could not open socket")
-            sys.exit(1)
-        self.logger.info("Openned port monitor socket")
-        self.parent = parent
-        self.pkt_sync = self.parent.pkt_sync
-        self.pkt_handler = None
+        self.socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW,
+                                    socket.htons(self.ETH_P_ALL))
+        self.socket.bind((interface_name, 0))
+        netutils.set_promisc(self.socket, interface_name)
+        self.socket.settimeout(self.RCV_TIMEOUT)
 
-    def interface_open(self, interface_name):
+    def __del__(self):
+        if self.socket:
+            self.socket.close()
+
+    def fileno(self):
         """
-        Open a socket in a promiscuous mode for a data connection.
-        @param interface_name port name as a string such as 'eth1'
-        @retval s socket
+        Return an integer file descriptor that can be passed to select(2).
         """
-        s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW,
-                          socket.htons(ETH_P_ALL))
-        s.bind((interface_name, 0))
-        netutils.set_promisc(s, interface_name)
-        s.settimeout(RCV_TIMEOUT)
-        return s
+        return self.socket.fileno()
+
+    def recv(self):
+        """
+        Receive a packet from this port.
+        @retval (packet data, timestamp)
+        """
+        pkt = self.socket.recv(self.RCV_SIZE_DEFAULT)
+        return (pkt, time.time())
+
+    def send(self, packet):
+        """
+        Send a packet out this port.
+        @param packet The packet data to send to the port
+        @retval The number of bytes sent
+        """
+        return self.socket.send(packet)
+
+    def down(self):
+        """
+        Bring the physical link down.
+        """
+        os.system("ifconfig down %s" % self.interface_name)
+
+    def up(self):
+        """
+        Bring the physical link up.
+        """
+        os.system("ifconfig up %s" % self.interface_name)
+
+
+class DataPlanePortPcap:
+    """
+    Alternate port implementation using libpcap. This is required for recent
+    versions of Linux (such as Linux 3.2 included in Ubuntu 12.04) which
+    offload the VLAN tag, so it isn't in the data returned from a read on a raw
+    socket. libpcap understands how to read the VLAN tag from the kernel.
+    """
+
+    def __init__(self, interface_name, port_number):
+        self.pcap = pcap.pcap(interface_name)
+        self.pcap.setnonblock()
+
+    def fileno(self):
+        return self.pcap.fileno()
+
+    def recv(self):
+        (timestamp, pkt) = next(self.pcap)
+        return (pkt, timestamp)
+
+    def send(self, packet):
+        return self.pcap.inject(packet, len(packet))
+
+    def down(self):
+        pass
+
+    def up(self):
+        pass
+
+class DataPlane(Thread):
+    """
+    This class provides methods to send and receive packets on the dataplane.
+    It uses the DataPlanePort class, or an alternative implementation of that
+    interface, to do IO on a particular port. A background thread is used to
+    read packets from the dataplane ports and enqueue them to be read by the
+    test. The kill() method must be called to shutdown this thread.
+    """
+
+    MAX_QUEUE_LEN = 100
+
+    def __init__(self, config=None):
+        Thread.__init__(self)
+
+        # dict from port number to port object
+        self.ports = {}
+
+        # dict from port number to list of (timestamp, packet)
+        self.packet_queues = {}
+
+        # cvar serves double duty as a regular top level lock and
+        # as a condition variable
+        self.cvar = Condition()
+
+        # Used to wake up the event loop from another thread
+        self.waker = ofutils.EventDescriptor()
+        self.killed = False
+
+        self.logger = logging.getLogger("dataplane")
+
+        if config is None:
+            self.config = {}
+        else:
+            self.config = config; 
+
+        ############################################################
+        #
+        # The platform/config can provide a custom DataPlanePort class
+        # here if you have a custom implementation with different
+        # behavior. 
+        #
+        # Set config.dataplane.portclass = MyDataPlanePortClass
+        # where MyDataPlanePortClass has the same interface as the class
+        # DataPlanePort defined here. 
+        #
+        if "dataplane" in self.config and "portclass" in self.config["dataplane"]:
+            self.dppclass = self.config["dataplane"]["portclass"]
+        elif have_pypcap:
+            self.dppclass = DataPlanePortPcap
+        else:
+            self.logger.warning("Missing pypcap, VLAN tests may fail. See README for installation instructions.")
+            self.dppclass = DataPlanePort
+
+        self.start()
 
     def run(self):
         """
         Activity function for class
         """
-        self.running = True
-        self.socs = [self.socket]
-        error_warned = False # Have we warned about error?
-        while self.running:
+        while not self.killed:
+            sockets = [self.waker] + self.ports.values()
             try:
-                sel_in, sel_out, sel_err = \
-                    select.select(self.socs, [], [], 1)
-            except (StandardError, socket.error):
+                sel_in, sel_out, sel_err = select.select(sockets, [], [], 1)
+            except:
                 print sys.exc_info()
                 self.logger.error("Select error, exiting")
                 break
 
-            if not self.running:
-                break
+            with self.cvar:
+                for port in sel_in:
+                    if port == self.waker:
+                        self.waker.wait()
+                        continue
+                    else:
+                        # Enqueue packet
+                        pkt, timestamp = port.recv()
+                        port_number = port._port_number
+                        self.logger.debug("Pkt len %d in on port %d",
+                                          len(pkt), port_number)
+                        queue = self.packet_queues[port_number]
+                        if len(queue) >= self.MAX_QUEUE_LEN:
+                            # Queue full, throw away oldest
+                            queue.pop(0)
+                            self.logger.debug("Discarding oldest packet to make room")
+                        queue.append((pkt, timestamp))
+                self.cvar.notify_all()
 
-            if (sel_in is None) or (len(sel_in) == 0):
-                continue
-
-            try:
-                rcvmsg = self.socket.recv(RCV_SIZE_DEFAULT)
-            except (StandardError, socket.error):
-                if not error_warned:
-                    self.logger.info("Socket error on recv")
-                    error_warned = True
-                continue
-
-            if len(rcvmsg) == 0:
-                self.logger.info("Zero len pkt rcvd")
-                self.kill()
-                break
-
-            rcvtime = time.clock()
-            self.logger.debug("Pkt len " + str(len(rcvmsg)) +
-                     " in at " + str(rcvtime))
-
-            # Enqueue packet
-            self.pkt_sync.acquire()
-            if len(self.packets) >= self.max_pkts:
-                # Queue full, throw away oldest
-                self.packets.pop(0)
-                self.packets_discarded += 1
-            else:
-                self.parent.packets_pending += 1
-            # Check if parent is waiting on this (or any) port
-            if self.parent.want_pkt:
-                if (not self.parent.want_pkt_port or
-                        self.parent.want_pkt_port == self.port_number):
-                    self.parent.got_pkt_port = self.port_number
-                    self.parent.want_pkt = False
-                    self.parent.pkt_sync.notify()
-            self.packets.append((rcvmsg, rcvtime))
-            self.packets_total += 1
-            self.pkt_sync.release()
-
-        self.logger.info("Thread exit ")
-
-    def kill(self):
-        """
-        Terminate the running thread
-        """
-        self.logger.debug("Port monitor kill")
-        self.running = False
-        try:
-            self.socket.close()
-        except StandardError:
-            self.logger.info("Ignoring dataplane soc shutdown error")
-
-    def dequeue(self, use_lock=True):
-        """
-        Get the oldest packet in the queue
-        @param use_lock If True, acquires the packet sync lock (which is
-        really the parent's lock)
-        @return The pair packet, packet time-stamp
-        """
-        if use_lock:
-            self.pkt_sync.acquire()
-        if len(self.packets) > 0:
-            pkt, pkt_time = self.packets.pop(0)
-            self.parent.packets_pending -= 1
-        else:
-            pkt = pkt_time = None
-        if use_lock:
-            self.pkt_sync.release()
-        return pkt, pkt_time
-
-    def timestamp_head(self):
-        """
-        Return the timestamp of the head of queue or None if empty
-        """
-        rv = None
-        try:
-            rv = self.packets[0][1]
-        except StandardError:
-            rv = None
-        return rv
-
-    def flush(self):
-        """
-        Clear the packet queue
-        """
-        self.pkt_sync.acquire()
-        self.packets_discarded += len(self.packets)
-        self.parent.packets_pending -= len(self.packets)
-        self.packets = []
-        self.packet_times = []
-        self.pkt_sync.release()
-
-
-    def send(self, packet, queue_id=0):
-        """
-        Send a packet to the dataplane port
-        @param packet The packet data to send to the port
-        @param queue_id The queue to send to (to be implemented)
-        @retval The number of bytes sent
-        """
-        return self.socket.send(packet)
-
-
-    def register(self, pkt_handler):
-        """
-        Register a callback function to receive packets from this
-        port.  The callback will be passed the packet, the
-        interface name and the port number (if set) on which the
-        packet was received.
-        """
-        self.pkt_handler = pkt_handler
-
-    def show(self, prefix=''):
-        print prefix + "Name:          " + self.interface_name
-        print prefix + "Pkts pending:  " + str(len(self.packets))
-        print prefix + "Pkts total:    " + str(self.packets_total)
-        print prefix + "socket:        " + str(self.socket)
-
-
-class DataPlane:
-    """
-    Class defining access primitives to the data plane
-    Controls a list of DataPlanePort objects
-    """
-    def __init__(self):
-        self.port_list = {}
-        # pkt_sync serves double duty as a regular top level lock and
-        # as a condition variable
-        self.pkt_sync = Condition()
-
-        # These are used to signal async pkt arrival for polling
-        self.want_pkt = False
-        self.want_pkt_port = None # What port required (or None)
-        self.got_pkt_port = None # On what port received?
-        self.packets_pending = 0 # Total pkts in all port queues
-        self.logger = logging.getLogger("dataplane")
-        self.pkt_handler = None
+        self.logger.info("Dataplane Thread exit")
 
     def port_add(self, interface_name, port_number):
         """
         Add a port to the dataplane
-        TBD:  Max packets for queue?
         @param interface_name The name of the physical interface like eth1
         @param port_number The port number used to refer to the port
+        Stashes the port number on the created port object.
         """
+        self.ports[port_number] = self.dppclass(interface_name, port_number)
+        self.ports[port_number]._port_number = port_number
+        self.packet_queues[port_number] = []
+        # Need to wake up event loop to change the sockets being selected on.
+        self.waker.notify()
 
-        self.port_list[port_number] = DataPlanePort(interface_name,
-                                                    port_number, self)
-        self.port_list[port_number].start()
-        if self.pkt_handler is not None:
-            self.port_list[port_number].register(self.pkt_handler)
-
-    def register(self, pkt_handler):
-        """
-        Register pkt_handler for all ports
-        """
-        self.pkt_handler = pkt_handler
-        for port_number in self.port_list.keys():
-            self.port_list[port_number].register(pkt_handler)
-        
-    def send(self, port_number, packet, queue_id=0):
+    def send(self, port_number, packet):
         """
         Send a packet to the given port
         @param port_number The port to send the data to
         @param packet Raw packet data to send to port
-        @param queue_id The queue to send to (to be implemented)
         """
-        #@todo Verify port_number is in keys of port_list
         self.logger.debug("Sending %d bytes to port %d" %
                           (len(packet), port_number))
-        bytes = self.port_list[port_number].send(packet, queue_id=queue_id)
+        bytes = self.ports[port_number].send(packet)
         if bytes != len(packet):
             self.logger.error("Unhandled send error, length mismatch %d != %d" %
                      (bytes, len(packet)))
         return bytes
 
-    def flood(self, packet):
+    def oldest_port_number(self):
         """
-        Send a packet to all ports
-        @param packet Raw packet data to send to port
+        Returns the port number with the oldest packet, or
+        None if no packets are queued.
         """
-        for port_number in self.port_list.keys():
-            bytes = self.port_list[port_number].send(packet)
-            if bytes != len(packet):
-                self.logger.error("Unhandled send error" +
-                         ", port %d, length mismatch %d != %d" %
-                         (port_number, bytes, len(packet)))
+        min_port_number = None
+        min_time = float('inf')
+        for (port_number, queue) in self.packet_queues.items():
+            if queue and queue[0][1] < min_time:
+                min_time = queue[0][1]
+                min_port_number = port_number
+        return min_port_number
 
-    def _oldest_packet_find(self):
-        # Find port with oldest packet
-        min_time = 0
-        min_port = -1
-        for port_number in self.port_list.keys():
-            ptime = self.port_list[port_number].timestamp_head()
-            if ptime:
-                if (min_port == -1) or (ptime < min_time):
-                    min_time = ptime
-                    min_port = port_number
-        oft_assert(min_port != -1, "Could not find port when pkts pending")
+    # Dequeues and yields packets in the order they were received.
+    # Yields (port number, packet, received time).
+    # If port_number is not specified yields packets from all ports.
+    def packets(self, port_number=None):
+        while True:
+            rcv_port_number = port_number or self.oldest_port_number()
 
-        return min_port
+            if rcv_port_number == None:
+                self.logger.debug("Out of packets on all ports")
+                break
 
-    def poll(self, port_number=None, timeout=None):
+            queue = self.packet_queues[rcv_port_number]
+
+            if len(queue) == 0:
+                self.logger.debug("Out of packets on port %d", rcv_port_number)
+                break
+
+            pkt, time = queue.pop(0)
+            yield (rcv_port_number, pkt, time)
+
+    def poll(self, port_number=None, timeout=-1, exp_pkt=None):
         """
         Poll one or all dataplane ports for a packet
 
         If port_number is given, get the oldest packet from that port.
         Otherwise, find the port with the oldest packet and return
         that packet.
+
+        If exp_pkt is true, discard all packets until that one is found
+
         @param port_number If set, get packet from this port
         @param timeout If positive and no packet is available, block
         until a packet is received or for this many seconds
+        @param exp_pkt If not None, look for this packet and ignore any
+        others received.  Note that if port_number is None, all packets
+        from all ports will be discarded until the exp_pkt is found
         @return The triple port_number, packet, pkt_time where packet
         is received from port_number at time pkt_time.  If a timeout
         occurs, return None, None, None
         """
 
-        self.pkt_sync.acquire()
+        if exp_pkt and not port_number:
+            self.logger.warn("Dataplane poll with exp_pkt but no port number")
 
-        # Check if requested specific port and it has a packet
-        if port_number and len(self.port_list[port_number].packets) != 0:
-            pkt, time = self.port_list[port_number].dequeue(use_lock=False)
-            self.pkt_sync.release()
-            oft_assert(pkt, "Poll: packet not found on port " +
-                       str(port_number))
-            return port_number, pkt, time
+        # Retrieve the packet. Returns (port number, packet, time).
+        def grab():
+            self.logger.debug("Grabbing packet")
+            for (rcv_port_number, pkt, time) in self.packets(port_number):
+                self.logger.debug("Checking packet from port %d", rcv_port_number)
+                if not exp_pkt or match_exp_pkt(exp_pkt, pkt):
+                    return (rcv_port_number, pkt, time)
+            self.logger.debug("Did not find packet")
+            return None
 
-        # Check if requested any port and some packet pending
-        if not port_number and self.packets_pending != 0:
-            port = self._oldest_packet_find()
-            pkt, time = self.port_list[port].dequeue(use_lock=False)
-            self.pkt_sync.release()
-            oft_assert(pkt, "Poll: oldest packet not found")
-            return port, pkt, time
+        with self.cvar:
+            ret = ofutils.timed_wait(self.cvar, grab, timeout=timeout)
 
-        # No packet pending; blocking call requested?
-        if not timeout:
-            self.pkt_sync.release()
-            return None, None, None
+        if ret != None:
+            return ret
+        else:
+            self.logger.debug("Poll time out, no packet from " + str(port_number))
+            return (None, None, None)
 
-        # Desired packet isn't available and timeout is specified
-        # Already holding pkt_sync; wait on pkt_sync variable
-        self.want_pkt = True
-        self.want_pkt_port = port_number
-        self.got_pkt_port = None
-        self.pkt_sync.wait(timeout)
-        self.want_pkt = False
-        if self.got_pkt_port:
-            pkt, time = \
-                self.port_list[self.got_pkt_port].dequeue(use_lock=False)
-            self.pkt_sync.release()
-            oft_assert(pkt, "Poll: pkt reported, but not found at " +
-                       str(self.got_pkt_port))
-            return self.got_pkt_port, pkt, time
-
-        self.pkt_sync.release()
-        self.logger.debug("Poll time out, no packet from " + str(port_number))
-
-        return None, None, None
-
-    def kill(self, join_threads=True):
+    def wakeup(self):
         """
-        Close all sockets for dataplane
-        @param join_threads If True call join on each thread
+        Wake up the event loop, presumably from another thread.
         """
-        for port_number in self.port_list.keys():
-            self.port_list[port_number].kill()
-            if join_threads:
-                self.logger.debug("Joining " + str(port_number))
-                self.port_list[port_number].join()
+        self.waker.notify()
+        
+    def kill(self):
+        """
+        Stop the dataplane thread.
+        """
+        self.killed = True
+        self.waker.notify()
+        self.join()
+        # Explicitly release ports to ensure we don't run out of sockets
+        # even if someone keeps holding a reference to the dataplane.
+        del self.ports
 
-        self.logger.info("DataPlane shutdown")
+    def port_down(self, port_number):
+        """Brings the specified port down"""
+        self.ports[port_number].down()
 
-    def show(self, prefix=''):
-        print prefix + "Dataplane Controller"
-        print prefix + "Packets pending" + str(self.packets_pending)
-        for pnum, port in self.port_list.items():
-            print prefix + "OpenFlow Port Number " + str(pnum)
-            port.show(prefix + '  ')
+    def port_up(self, port_number):
+        """Brings the specified port up"""
+        self.ports[port_number].up()
 
+    def flush(self):
+        """
+        Drop any queued packets.
+        """
+        for port_number in self.packet_queues.keys():
+            self.packet_queues[port_number] = []

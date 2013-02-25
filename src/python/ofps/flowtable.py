@@ -53,14 +53,14 @@ class FlowTable(object):
 
     def __init__(self, table_id=0):
         self.flow_entries = []
-        self.table_id = table_id
+        # self.table_id = table_id
         self.flow_sync = Lock()
         self.logger = logging.getLogger("flowtable")
         self.lookup_count = 0
         self.matched_count = 0
         # by default, when a packet does not match the table
         # is send to controller -- OpenFlow Spec, A.3.3
-        self.miss_policy = ofp.OFPTC_TABLE_MISS_CONTROLLER
+        # self.miss_policy = ofp.OFPTC_TABLE_MISS_CONTROLLER
 
     def expire(self):
         """
@@ -82,7 +82,7 @@ class FlowTable(object):
                     msg.cookie = flow.flow_mod.cookie
                     msg.priority = flow.flow_mod.priority
                     msg.reason = timeout
-                    msg.table_id = self.table_id
+                    # msg.table_id = self.table_id
                     if flow.insert_time:
                         duration = time.time() - flow.insert_time
                     else:

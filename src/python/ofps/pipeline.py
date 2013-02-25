@@ -37,7 +37,7 @@ from exec_actions import execute_actions
 from exec_actions import packet_in_to_controller
 import oftest.cstruct as ofp
 import oftest.message as message 
-import oftest.instruction as instruction
+# import oftest.instruction as instruction
 from oftest import ofutils
 import validate
 
@@ -123,36 +123,36 @@ class FlowPipeline(Thread):
                 return (rv, err_msg)
         return (0, None)   # success
     
-    def table_mod_process(self, table_mod):
-        """
-        Apply the config changes specified in a table_mod to
-        one or more tables in the pipeline
-        @param table_mod a fully instantiated table_mod class
-        @return None on success, an ofp_error message on error
-        """
-        if (table_mod.table_id >= self.n_tables and 
-            table_mod.table_id != 0xff):
-            return ofutils.of_error_msg_make(ofp.OFPET_TABLE_MOD_FAILED, 
-                                             ofp.OFPTMFC_BAD_TABLE,
-                                             table_mod)
-        if table_mod.config not in [ ofp.OFPTC_TABLE_MISS_CONTROLLER, 
-                                    ofp.OFPTC_TABLE_MISS_CONTINUE, 
-                                    ofp.OFPTC_TABLE_MISS_DROP]:
-            return ofutils.of_error_msg_make(ofp.OFPET_TABLE_MOD_FAILED,
-                                             ofp.OFPTMFC_BAD_CONFIG,
-                                             table_mod)
+    # def table_mod_process(self, table_mod):
+    #     """
+    #     Apply the config changes specified in a table_mod to
+    #     one or more tables in the pipeline
+    #     @param table_mod a fully instantiated table_mod class
+    #     @return None on success, an ofp_error message on error
+    #     """
+    #     if (table_mod.table_id >= self.n_tables and 
+    #         table_mod.table_id != 0xff):
+    #         return ofutils.of_error_msg_make(ofp.OFPET_TABLE_MOD_FAILED, 
+    #                                          ofp.OFPTMFC_BAD_TABLE,
+    #                                          table_mod)
+    #     if table_mod.config not in [ ofp.OFPTC_TABLE_MISS_CONTROLLER, 
+    #                                 ofp.OFPTC_TABLE_MISS_CONTINUE, 
+    #                                 ofp.OFPTC_TABLE_MISS_DROP]:
+    #         return ofutils.of_error_msg_make(ofp.OFPET_TABLE_MOD_FAILED,
+    #                                          ofp.OFPTMFC_BAD_CONFIG,
+    #                                          table_mod)
             
-        update_list = None
-        if table_mod.table_id == 0xff:
-            update_list = self.tables
-        else:
-            update_list = [ self.tables[table_mod.table_id]]
-        for table in update_list:
-            self.logger.debug("table_mod: " + 
-                              "setting table %d " % table.table_id +
-                              "to miss_policy %d" % table_mod.config)
-            table.miss_policy = table_mod.config
-        return None 
+    #     update_list = None
+    #     if table_mod.table_id == 0xff:
+    #         update_list = self.tables
+    #     else:
+    #         update_list = [ self.tables[table_mod.table_id]]
+    #     for table in update_list:
+    #         self.logger.debug("table_mod: " + 
+    #                           "setting table %d " % table.table_id +
+    #                           "to miss_policy %d" % table_mod.config)
+    #         # table.miss_policy = table_mod.config
+    #     return None 
 
     def table_caps_get(self, table_id=0):
         """
@@ -224,31 +224,31 @@ class FlowPipeline(Thread):
         """
         return None
 
-    def run_instruction(self, switch, inst, packet):
-        """
-        Private function to execute one instruction on a packet.
-        Need switch for immeidate apply
-        """
-        if inst.__class__ == instruction.instruction_goto_table:
-            if inst.table_id >= self.n_tables:
-                self.logger.error("Bad goto table %d" % inst.table_id)
-            else:
-                return inst.table_id
-        elif inst.__class__ == instruction.instruction_write_actions:
-            for action in inst.actions:
-                packet.write_action(action)
-        elif inst.__class__ == instruction.instruction_apply_actions:
-            execute_actions(switch, packet, inst.actions)
-        elif inst.__class__ == instruction.instruction_experimenter:
-            self.logger.error("Got experimenter instruction")
-        elif inst.__class__ == instruction.instruction_write_metadata:
-            packet.set_metadata(inst.metadata, inst.metadata_mask)
-        elif inst.__class__ == instruction.instruction_clear_actions:
-            packet.clear_actions()
-        else:
-            self.logger.error("Bad instruction")
+    # def run_instruction(self, switch, inst, packet):
+    #     """
+    #     Private function to execute one instruction on a packet.
+    #     Need switch for immeidate apply
+    #     """
+    #     if inst.__class__ == instruction.instruction_goto_table:
+    #         if inst.table_id >= self.n_tables:
+    #             self.logger.error("Bad goto table %d" % inst.table_id)
+    #         else:
+    #             return inst.table_id
+    #     elif inst.__class__ == instruction.instruction_write_actions:
+    #         for action in inst.actions:
+    #             packet.write_action(action)
+    #     elif inst.__class__ == instruction.instruction_apply_actions:
+    #         execute_actions(switch, packet, inst.actions)
+    #     elif inst.__class__ == instruction.instruction_experimenter:
+    #         self.logger.error("Got experimenter instruction")
+    #     elif inst.__class__ == instruction.instruction_write_metadata:
+    #         packet.set_metadata(inst.metadata, inst.metadata_mask)
+    #     elif inst.__class__ == instruction.instruction_clear_actions:
+    #         packet.clear_actions()
+    #     else:
+    #         self.logger.error("Bad instruction")
 
-        return None
+    #     return None
 
     def apply_pipeline(self, switch, packet):
         """
@@ -272,28 +272,28 @@ class FlowPipeline(Thread):
                         next_table_id = new_table_id
                 table_id = next_table_id
             else:
-                if table.miss_policy == ofp.OFPTC_TABLE_MISS_CONTINUE:
-                    self.logger.debug("No match in table %d:" % table_id
-                                      + " next table")
-                    table_id = table_id + 1
-                    if table_id >= self.n_tables:
-                        table_id = None      
-                elif table.miss_policy == ofp.OFPTC_TABLE_MISS_CONTROLLER:
-                    self.logger.debug("No match in table %d:" % table_id 
-                                      + " send to controller")
-                    table_id = None     # break while loop
-                else:
-                    if table.miss_policy != ofp.OFPTC_TABLE_MISS_DROP:
-                        # if this triggers, something is really broken
-                        # defaulting to CONTINUE might be nicer, but
-                        # would let the problem persist for longer
-                        self.logger.error(
-                            "Table %d miss policy is not one of " % table_id +
-                            "OFPTC_TABLE_MISS_*: DROPing packet")
-                    self.logger.debug(
-                            "No match in table %d: dropping" 
-                            % table_id)
-                    return
+                # if table.miss_policy == ofp.OFPTC_TABLE_MISS_CONTINUE:
+                #     self.logger.debug("No match in table %d:" % table_id
+                #                       + " next table")
+                #     table_id = table_id + 1
+                #     if table_id >= self.n_tables:
+                #         table_id = None      
+                # elif table.miss_policy == ofp.OFPTC_TABLE_MISS_CONTROLLER:
+                self.logger.debug("No match in table %d:" % table_id 
+                                  + " send to controller")
+                table_id = None     # break while loop
+                # else:
+                #     if table.miss_policy != ofp.OFPTC_TABLE_MISS_DROP:
+                #         # if this triggers, something is really broken
+                #         # defaulting to CONTINUE might be nicer, but
+                #         # would let the problem persist for longer
+                #         self.logger.error(
+                #             "Table %d miss policy is not one of " % table_id +
+                #             "OFPTC_TABLE_MISS_*: DROPing packet")
+                #     self.logger.debug(
+                #             "No match in table %d: dropping" 
+                #             % table_id)
+                #     return
                     
         if matched:
             self.logger.debug("Executing actions on packet")

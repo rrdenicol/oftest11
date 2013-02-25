@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as et
 from ncclient import manager 
 import sys, getopt#, os
+import oftest.cstruct as ofp
 
 
 templateCE = """
@@ -22,8 +23,34 @@ templateCE = """
 </config>
 """
 
+def getAllPorts(host, port, user, passwd):
+    datafilter = datafilter = ("xpath","/config/system/roadm/wdm-interface")
+    config = readFromConfd(host, port, user, passwd, datafilter)
+    root = et.fromstring(config)
+    all_ports = {}
+    j = 0
+    for k in root.iter(getFullInterfaceName('interface')):
+        name = ''
+        _type = ''
+        
+        for i in k.iter(getFullInterfaceName('name')):
+            name = i.text
+        for i in k.iter(getFullInterfaceName('type')):
+            _type = i.text
+
+        all_ports[j] = name
+        # print "pairing of_port_no = " + str(j) + "  |  name = " + name
+        j+=1
+
+    return all_ports
+
+
 def getFullRoadmName(tag):
     return "{http://cpqd.com.br/drc/gso/ng/roadm/interface}%s" % (tag)
+
+def getFullInterfaceName(tag):
+    return "{http://cpqd.com.br/roadm/system}%s" % (tag)
+    
 
 def default_unknown_host_cb(host, key):
     return True
@@ -50,6 +77,32 @@ def writeToConfd(host, port, user, passwd, cc_label, cc_channel, cc_in, cc_out):
 def readFromConfd(host, port, user, passwd, datafilter):
     with getSession(host, port, user, passwd) as m:
         return m.get_config(source='running', filter=datafilter).data_xml
+
+def isCCAvailable(host, port, user, passwd, inp, outp, channel):
+    datafilter = datafilter = ("xpath","/config/system/cross-connections")
+    config = readFromConfd(host, port, user, passwd, datafilter)
+    root = et.fromstring(config)
+    
+    for k in root.iter(getFullRoadmName('cross-connection')):
+        rin = ''
+        rout = ''
+        rch = ''
+        
+        for i in k.iter(getFullRoadmName('in')):
+            rin = i.text
+        for i in k.iter(getFullRoadmName('out')):
+            rout = i.text
+        for i in k.iter(getFullRoadmName('channel')):
+            rch = i.text
+        
+        print 'checking:'
+        print "in: %s out: %s channel: %s" % (rin, rout, rch)
+        print 'against:'
+        print "in: %s out: %s channel: %s" % (inp, outp, channel)
+        
+        if (rin == inp) & (rout == outp) & (rch == channel):
+            return False
+    return True
 
 # def main(argv):
     # """readConfig('127.0.0.1', 2022, 'admin', 'admin')"""

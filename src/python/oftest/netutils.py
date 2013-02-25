@@ -23,7 +23,7 @@ Network utilities for the OpenFlow test framework
 #############################################################################
 
 import socket
-from fcntl import ioctl #@UnresolvedImport
+from fcntl import ioctl
 import struct
 
 # From net/if_arp.h
@@ -43,10 +43,21 @@ PACKET_MR_PROMISC      = 1
 SOL_PACKET = 263
 
 def get_if(iff,cmd):
-    s=socket.socket()
-    ifreq = ioctl(s, cmd, struct.pack("16s16x",iff))
-    s.close()
-    return ifreq
+  s=socket.socket()
+  ifreq = ioctl(s, cmd, struct.pack("16s16x",iff))
+  s.close()
+  return ifreq
+
+def get_if_index(iff):
+  return int(struct.unpack("I",get_if(iff, SIOCGIFINDEX)[16:20])[0])
+
+def set_promisc(s,iff,val=1):
+  mreq = struct.pack("IHH8s", get_if_index(iff), PACKET_MR_PROMISC, 0, "")
+  if val:
+      cmd = PACKET_ADD_MEMBERSHIP
+  else:
+      cmd = PACKET_DROP_MEMBERSHIP
+  s.setsockopt(SOL_PACKET, cmd, mreq)
 
 def get_if_hwaddr(iff):
     addrfamily, mac = struct.unpack("16xh6s8x",get_if(iff,SIOCGIFHWADDR))
@@ -54,18 +65,6 @@ def get_if_hwaddr(iff):
         return str2mac(mac)
     else:
         raise Exception("Unsupported address family (%i)"%addrfamily)
-
-def get_if_index(iff):
-    return int(struct.unpack("I",get_if(iff, SIOCGIFINDEX)[16:20])[0])
-
-def set_promisc(s,iff,val=1):
-    mreq = struct.pack("IHH8s", get_if_index(iff), PACKET_MR_PROMISC, 0, "")
-    if val:
-        cmd = PACKET_ADD_MEMBERSHIP
-    else:
-        cmd = PACKET_DROP_MEMBERSHIP
-    s.setsockopt(SOL_PACKET, cmd, mreq)
-
 
 def str2mac(mac):
     """ 

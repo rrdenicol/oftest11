@@ -187,7 +187,7 @@ def features_request(switch, msg, rawmsg):
     rep.ports = switch.ports.values()
     switch.controller.message_send(rep)
 
-import read as read_it
+import database_proxy as DataBaseP
 import xml.etree.ElementTree as et
 # def getFullNcsName(tag):
 #     return "{http://cpqd.com.br/drc/gso/ng/ncs/interface}%s" % (tag)
@@ -213,7 +213,7 @@ port_to_name_map = {
     770 : 'D2-OUT',
     771 : 'D3-OUT',
     772 : 'D4-OUT',
-    ofp.OFPP_ANY : 'ANY'
+    ofp.OFPP_ALL : 'ALL'
 }
 
 cc_instance_map = {
@@ -247,24 +247,24 @@ def flow_mod(switch, msg, rawmsg):
     @param rawmsg The actual packet received as a string
     """
 
-    if msg.out_port in port_to_name_map.keys() and  msg.match.in_port in port_to_name_map.keys()  \
-       and cc_port_used[msg.out_port] == 0 and  cc_port_used[msg.match.in_port] == 0 :
-        cc_label = port_to_name_map[msg.match.in_port] + '_' + port_to_name_map[msg.out_port] + '_' + str(msg.match.dl_vlan)
-        print "LABEL = " + cc_label
-        read_it.writeToConfd('127.0.0.1', 2022, 'admin', 'admin', cc_label, 
-            str(msg.match.dl_vlan) , 
-            port_to_name_map[msg.match.in_port], 
-            port_to_name_map[msg.out_port])
-        cc_port_used[msg.match.in_port] = 1
-        cc_port_used[msg.out_port] = 1
+    # if msg.out_port in port_to_name_map.keys() and  msg.match.in_port in port_to_name_map.keys()  \
+    #    and cc_port_used[msg.out_port] == 0 and  cc_port_used[msg.match.in_port] == 0 :
+    #     cc_label = port_to_name_map[msg.match.in_port] + '_' + port_to_name_map[msg.out_port] + '_' + str(msg.match.dl_vlan)
+    #     print "LABEL = " + cc_label
+    #     read_it.writeToConfd('127.0.0.1', 2022, 'admin', 'admin', cc_label, 
+    #         str(msg.match.dl_vlan) , 
+    #         port_to_name_map[msg.match.in_port], 
+    #         port_to_name_map[msg.out_port])
+    #     cc_port_used[msg.match.in_port] = 1
+    #     cc_port_used[msg.out_port] = 1
 
-    else :
-        print ""
-    # (rv, err_msg) = switch.pipeline.flow_mod_process(msg, switch.groups)
-    # switch.logger.debug("Handled flow_mod, result: " + str(rv) + ", " +
-    #                     "None" if err_msg is None else err_msg.__class__.__name__)
-    # if rv !=  0:
-    #     switch.controller.message_send(err_msg)
+    # else :
+    #     print "what?"
+    (rv, err_msg) = switch.pipeline.flow_mod_process(msg, switch.groups)
+    switch.logger.debug("Handled flow_mod, result: " + str(rv) + ", " +
+                        "None" if err_msg is None else err_msg.__class__.__name__)
+    if rv !=  0:
+        switch.controller.message_send(err_msg)
 
 def flow_mod_failed_error_msg(switch, msg, rawmsg):
     """
@@ -305,7 +305,7 @@ def flow_stats_request(switch, msg, rawmsg):
     # ns3 = 
     # datafilter = ("xpath","/{{{0}}}config/{{{0}}}system/{{{1}}}roadm".format(ns1 , ns2))
     datafilter = ("xpath","/config/system/roadm/cross-connections")
-    config = read_it.readFromConfd('127.0.0.1', 2022, 'admin', 'admin',  datafilter)
+    config = DataBaseP.readFromConfd('127.0.0.1', 2022, 'admin', 'admin',  datafilter)
     root = et.fromstring(config)
     # print "ROOT == " + root
 
@@ -336,7 +336,7 @@ def flow_stats_request(switch, msg, rawmsg):
 
             print "DO whatever "
             return
-        elif (inp == port_to_name_map[0] )& (outp == port_to_name_map[ofp.OFPP_ANY] )& (channel == '0' ):
+        elif (inp == port_to_name_map[0] )& (outp == port_to_name_map[ofp.OFPP_ALL] )& (channel == '0' ):
             print "Add response : "
             stat = message.flow_stats_entry()
             # stat.match.in_port = 
@@ -602,17 +602,17 @@ def switch_config_failed_error_msg(switch, msg, rawmsg):
     """
     switch.logger.debug("Received switch_config_failed_error_msg from controller")
 
-def table_mod(switch, msg, rawmsg):
-    """
-    Process a table_mod message from the controller
-    @param switch The main switch object
-    @param msg The parsed message object of type table_mod
-    @param rawmsg The actual packet received as a string
-    """
-    switch.logger.debug("Received table_mod from controller")
-    error = switch.pipeline.table_mod_process(msg)
-    if error :
-        switch.controller.message_send(error)
+# def table_mod(switch, msg, rawmsg):
+#     """
+#     Process a table_mod message from the controller
+#     @param switch The main switch object
+#     @param msg The parsed message object of type table_mod
+#     @param rawmsg The actual packet received as a string
+#     """
+#     switch.logger.debug("Received table_mod from controller")
+#     error = switch.pipeline.table_mod_process(msg)
+#     if error :
+#         switch.controller.message_send(error)
 
 def table_mod_failed_error_msg(switch, msg, rawmsg):
     """

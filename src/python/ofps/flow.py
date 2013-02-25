@@ -33,7 +33,7 @@ table.
 
 import oftest.cstruct as ofp
 import oftest.message as message
-import oftest.instruction as instruction
+# import oftest.instruction as instruction
 import copy
 import time
 import logging
@@ -86,11 +86,14 @@ def flow_has_out_port(flow, port, groups):
     if port == ofp.OFPP_ANY or port == ofp.OFPP_ALL:
         return True
 
-    for inst in flow.flow_mod.instructions:
-        if inst.__class__ == instruction.instruction_write_actions or \
-                inst.__class__ == instruction.instruction_apply_actions:
-            if action_list_has_out_port(inst.actions, port, groups):
-                return True
+    for act in flow.flow_mod.actions:
+        if act.__class__ == action.output :
+            return True 
+    # for inst in flow.flow_mod.instructions:
+    #     if inst.__class__ == instruction.instruction_write_actions or \
+    #             inst.__class__ == instruction.instruction_apply_actions:
+    #         if action_list_has_out_port(inst.actions, port, groups):
+    #             return True
 
     return False
 

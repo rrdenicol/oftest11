@@ -393,7 +393,14 @@ class ControllerInterface(threading.Thread):
             return
         self.handlers[msg_type] = {"fn" : handler, 
                                    "cookie" : cookie}
-
+    def kill(self):
+        """
+        Stop the dataplane thread.
+        """
+        self.killed = True
+        self.waker.notify()
+        self.join()
+        
     def __str__(self):
         string = "Controller Interface:\n"
         string += "  total pkts      " + str(self.packets_total) + "\n"

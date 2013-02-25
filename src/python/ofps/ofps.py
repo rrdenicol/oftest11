@@ -59,6 +59,7 @@ import oftest.netutils as netutils
 import ctrl_msg
 
 DEFAULT_TABLE_COUNT = 4
+killall = False
 
 class OFSwitchConfig(object):
     """
@@ -127,7 +128,13 @@ class OFSwitchConfig(object):
 
     def addInterface(self, intr):
         self.port_map[len(self.port_map) + 1] = intr
- 
+
+import database_proxy as DataBaseP
+import xml.etree.ElementTree as et
+
+def getFullRoadmName(tag):
+    return "{http://cpqd.com.br/roadm/system}%s" % (tag)
+
 class OFSwitch(Thread):
     """
     Top level class for the ofps implementation
@@ -154,7 +161,7 @@ class OFSwitch(Thread):
         self.config = OFSwitchConfig()
         self.logger = logging.getLogger("switch")
         self.groups = GroupTable()
-        self.ports = {}         # hash of ports[index]=ofp.ofp_port
+        self.ports = {}         # hash of ports[index]=ofp.ofp_phy_port
     def config_set(self, config):
         """
         Set the configuration for the switch.
@@ -193,10 +200,15 @@ class OFSwitch(Thread):
         """
         Main execute function for running the switch
         """
+        global killall
 
         logging.basicConfig(filename="", level=logging.DEBUG)
         self.logger.info("Switch thread running")
         host = self.config.controller_ip
+        # FUNCTION TO READ FROM THE DB ALL PORTS AVAILABLE
+        all_ports = DataBaseP.getAllPorts('127.0.0.1', 2022, 'admin', 'admin')
+        print all_ports
+
         if self.config.passive_connect:
             host = None
         self.controller = ControllerInterface(host=host,
@@ -207,17 +219,21 @@ class OFSwitch(Thread):
         self.pipeline.controller_set(self.controller)
         self.pipeline.start()
         self.logger.info("Pipeline started")
-        link_status = ofp.OFPPF_1GB_FD  #@todo dynamically infer this from the interface status
-        for of_port, ifname in self.config.port_map.items():          
-            self.dataplane.port_add(ifname, of_port)
-            port = ofp.ofp_port()
+        # link_status = ofp.OFPPF_1GB_FD  #@todo dynamically infer this from the interface status
+        link_status = ofp.OFPPF_FIBER
+
+        # for of_port, ifname in self.config.port_map.items():  
+        for of_port, ifname in all_ports.items():  
+
+            # self.dataplane.port_add(ifname, of_port)
+            port = ofp.ofp_phy_port()
             port.port_no = of_port
             port.name = ifname
-            port.max_speed = 9999999
-            port.curr_speed = 9999999
-            mac = netutils.get_if_hwaddr(port.name)
-            self.logger.info("Added port %s (ind=%d) with mac %x:%x:%x:%x:%x:%x" % ((ifname, of_port) + mac))
-            port.hw_addr = list(mac)    # stupid frickin' python; need to convert a tuple to a list
+            # port.max_speed = 9999999
+            # port.curr_speed = 9999999
+            # mac = netutils.get_if_hwaddr(port.name)
+            self.logger.info("Added port %s (ind=%d) " % (ifname, of_port) )
+            # port.hw_addr = list(mac)    # stupid frickin' python; need to convert a tuple to a list
             port.config = 0
             port.state = 0 #@todo infer if link is up/down and set OFPPS_LINK_DOWN
             port.advertised = link_status
@@ -227,7 +243,6 @@ class OFSwitch(Thread):
             self.ports[of_port]=port
         # Register to receive all controller packets
         self.controller.register("all", self.ctrl_pkt_handler, calling_obj=self)
-        self.controller.daemon = True
         self.controller.start()
         self.logger.info("Controller started")
 
@@ -236,29 +251,39 @@ class OFSwitch(Thread):
         sleep_time = 1
         while True:
             # time.sleep(sleep_time)
-
-            (of_port, data, recv_time) = self.dataplane.poll(timeout=5)
-            if not self.controller.isAlive():
-                # @todo Implement fail open/closed
-                self.logger.error("Controller dead\n")
+            try :
+                (of_port, data, recv_time) = self.dataplane.poll(timeout=5)
+                if not self.controller.isAlive():
+                    # @todo Implement fail open/closed
+                    self.logger.error("Controller dead\n")
+                    break
+                if not self.pipeline.isAlive():
+                    # @todo Implement fail open/closed
+                    self.logger.error("Pipeline dead\n")
+                    break
+                if data is None:
+                    self.logger.debug("No packet for 5 seconds\n")
+                    continue
+                self.logger.debug("Packet len " + str(len(data)) +
+                                  " in on port " + str(of_port))
+                packet = Packet(in_port=of_port, data=data)
+                self.pipeline.apply_pipeline(self, packet)
+            except :
+                # killall = True
+                self.controller.active = False
+                self.pipeline.active = False
+                self.dataplane.killed = True
+                self.dataplane.wakeup()
+                raise
                 break
-            if not self.pipeline.isAlive():
-                # @todo Implement fail open/closed
-                self.logger.error("Pipeline dead\n")
-                break
-            if data is None:
-                self.logger.debug("No packet for 5 seconds\n")
-                continue
-            self.logger.debug("Packet len " + str(len(data)) +
-                              " in on port " + str(of_port))
-            packet = Packet(in_port=of_port, data=data)
-            self.pipeline.apply_pipeline(self, packet)
 
         self.logger.error("Exiting OFSwitch thread")
         self.pipeline.kill()
         self.dataplane.kill()
+        self.controller.kill()
         self.pipeline.join()
         self.controller.join()
+        self.dataplane.join()
     
     def __str__(self):
         str  = "OFPS:: OpenFlow Python Switch\n"
@@ -272,10 +297,16 @@ class OFSwitch(Thread):
         return OFSwitch.VERSION
 
     def sigint_handler(signum, frame):
+        self.controller.active = False
+        self.pipeline.active = False
+        self.dataplane.killed = True
+        self.dataplane.wakeup()
         self.dataplane.kill()
         self.controller.kill()
+        self.pipeline.kill()
         self.pipeline.join()
         self.controller.join()
+        self.dataplane.join()
 
         sys.exit()
 

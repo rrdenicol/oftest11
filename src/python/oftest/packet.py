@@ -371,8 +371,6 @@ class Packet(object):
         """
         self.bytes = len(self.data)
         self.match.in_port = self.in_port
-        self.match.type = ofp.OFPMT_STANDARD
-        self.match.length = ofp.OFPMT_STANDARD_LENGTH
         self.match.wildcards = 0
         self.match.nw_dst_mask = 0
         self.match.nw_dst_mask = 0
@@ -444,7 +442,7 @@ class Packet(object):
             idx += 2
         else:
             self.vlan_tag_offset = None
-            self.match.dl_vlan = ofp.OFPVID_NONE
+            self.match.dl_vlan = 0
             self.match.dl_vlan_pcp = 0
             
         if l2_type in ETHERTYPES_MPLS:

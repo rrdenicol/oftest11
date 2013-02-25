@@ -1,42 +1,44 @@
 """
-OpenFlow action, instruction and bucket list classes
+OpenFlow actions list class
 """
 
 from action import *
 from cstruct import ofp_header
-from base_list import ofp_base_list
 import copy
+
+# # Map OFP action identifiers to the actual structures used on the wire
+# action_object_map = {
+#     OFPAT_OUTPUT                        : ofp_action_output,
+#     OFPAT_SET_VLAN_VID                  : ofp_action_vlan_vid,
+#     OFPAT_SET_VLAN_PCP                  : ofp_action_vlan_pcp,
+#     OFPAT_STRIP_VLAN                    : ofp_action_header,
+#     OFPAT_SET_DL_SRC                    : ofp_action_dl_addr,
+#     OFPAT_SET_DL_DST                    : ofp_action_dl_addr,
+#     OFPAT_SET_NW_SRC                    : ofp_action_nw_addr,
+#     OFPAT_SET_NW_DST                    : ofp_action_nw_addr,
+#     OFPAT_SET_NW_TOS                    : ofp_action_nw_tos,
+#     OFPAT_SET_TP_SRC                    : ofp_action_tp_port,
+#     OFPAT_SET_TP_DST                    : ofp_action_tp_port,
+#     OFPAT_ENQUEUE                       : ofp_action_enqueue
+# }
 
 action_object_map = {
     OFPAT_OUTPUT                        : action_output,
     OFPAT_SET_VLAN_VID                  : action_set_vlan_vid,
     OFPAT_SET_VLAN_PCP                  : action_set_vlan_pcp,
+    OFPAT_STRIP_VLAN                    : action_strip_vlan,
     OFPAT_SET_DL_SRC                    : action_set_dl_src,
     OFPAT_SET_DL_DST                    : action_set_dl_dst,
     OFPAT_SET_NW_SRC                    : action_set_nw_src,
     OFPAT_SET_NW_DST                    : action_set_nw_dst,
     OFPAT_SET_NW_TOS                    : action_set_nw_tos,
-    OFPAT_SET_NW_ECN                    : action_set_nw_ecn,
     OFPAT_SET_TP_SRC                    : action_set_tp_src,
     OFPAT_SET_TP_DST                    : action_set_tp_dst,
-    OFPAT_COPY_TTL_OUT                  : action_copy_ttl_out,
-    OFPAT_COPY_TTL_IN                   : action_copy_ttl_in,
-    OFPAT_SET_MPLS_LABEL                : action_set_mpls_label,
-    OFPAT_SET_MPLS_TC                   : action_set_mpls_tc,
-    OFPAT_SET_MPLS_TTL                  : action_set_mpls_ttl,
-    OFPAT_DEC_MPLS_TTL                  : action_dec_mpls_ttl,
-    OFPAT_PUSH_VLAN                     : action_push_vlan,
-    OFPAT_POP_VLAN                      : action_pop_vlan,
-    OFPAT_PUSH_MPLS                     : action_push_mpls,
-    OFPAT_POP_MPLS                      : action_pop_mpls,
-    OFPAT_SET_QUEUE                     : action_set_queue,
-    OFPAT_GROUP                         : action_group,
-    OFPAT_SET_NW_TTL                    : action_set_nw_ttl,
-    OFPAT_DEC_NW_TTL                    : action_dec_nw_ttl,
-    OFPAT_EXPERIMENTER                  : action_experimenter
+    OFPAT_ENQUEUE                       : action_enqueue,
+    OFPAT_VENDOR                        : action_vendor
 }
 
-class action_list(ofp_base_list):
+class action_list(object):
     """
     Maintain a list of actions
 
@@ -52,11 +54,22 @@ class action_list(ofp_base_list):
 
     """
 
-    def __init__(self):
-        ofp_base_list.__init__(self)
-        self.actions = self.items
-        self.name = "action"
-        self.class_list = action_class_list
+    def __init__(self, actions=None):
+        if actions == None:
+            actions = []
+        self.actions = actions
+
+    def pack(self):
+        """
+        Pack a list of actions
+
+        Returns the packed string
+        """
+
+        packed = ""
+        for act in self.actions:
+            packed += act.pack()
+        return packed
 
     def unpack(self, binary_string, bytes=None):
         """
@@ -95,3 +108,82 @@ class action_list(ofp_base_list):
             bytes_done += hdr.len
         return cur_string
 
+    def add(self, action):
+        """
+        Add an action to an action list
+
+        @param action The action to add
+
+        """
+        if not isinstance(action, action_class_list):
+            raise ValueError("%s is not an action" % type(action))
+        self.actions.append(copy.deepcopy(action))
+        return True # for backwards compatibility
+
+    def remove_type(self, type):
+        """
+        Remove the first action on the list of the given type
+
+        @param type The type of action to search
+
+        @return The object removed, if any; otherwise None
+
+        """
+        for index in xrange(len(self.actions)):
+            if self.actions[index].type == type:
+                return self.actions.pop(index)
+        return None
+
+    def find_type(self, type):
+        """
+        Find the first action on the list of the given type
+
+        @param type The type of action to search
+
+        @return The object with the matching type if any; otherwise None
+
+        """
+        for index in xrange(len(self.actions)):
+            if self.actions[index].type == type:
+                return self.actions[index]
+        return None
+
+    def extend(self, other):
+        """
+        Add the actions in other to this list
+
+        @param other An object of type action_list whose
+        entries are to be merged into this list
+
+        @return True if successful.  If not successful, the list
+        may have been modified.
+
+        @todo Check if this is proper deep copy or not
+
+        """
+        for act in other.actions:
+            self.add(act)
+        return True # for backwards compatibility
+        
+    def __len__(self):
+        length = 0
+        for act in self.actions:
+            length += act.__len__()
+        return length
+
+    def __eq__(self, other):
+        if type(self) != type(other): return False
+        if self.actions != other.actions: return False
+        return True
+
+    def __ne__(self, other): return not self.__eq__(other)
+        
+    def show(self, prefix=''):
+        outstr = prefix + "Action List with " + str(len(self.actions)) + \
+            " actions\n"
+        count = 0
+        for obj in self.actions:
+            count += 1
+            outstr += prefix + "  Action " + str(count) + ": \n"
+            outstr += obj.show(prefix + '    ')
+        return outstr
