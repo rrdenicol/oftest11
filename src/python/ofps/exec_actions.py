@@ -26,8 +26,9 @@
 import logging
 import traceback
 
-import oftest.cstruct as ofp
-import oftest.message as message
+# import oftest.cstruct as ofp
+import ofp
+import ofp.message as message
 
 
 """

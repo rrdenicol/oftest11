@@ -23,8 +23,9 @@
 # SOFTWARE.
 # 
 ######################################################################
-import oftest.cstruct as ofp
-import oftest.message as message
+# import oftest.cstruct as ofp
+import ofp
+import ofp.message as message
 from oftest import ofutils
 
 """
@@ -221,23 +222,44 @@ cc_instance_map = {
 }
 
 cc_port_used = {
+    0   : 0,
     1   : 0,
     2   : 0,
     3   : 0,
     4   : 0,
-    257 : 0,
-    258 : 0,
-    259 : 0,
-    260 : 0,
-    513 : 0,
-    514 : 0,
-    515 : 0,
-    516 : 0,
-    769 : 0,
-    770 : 0,
-    771 : 0,
-    772 : 0
+    5   : 0,
+    6   : 0,
+    7   : 0,
+    8   : 0,
+    9   : 0,
+    10  : 0,
+    11  : 0,
+    12  : 0,
+    13  : 0,
+    14  : 0,
+    15  : 0,
+    16  : 0
 }
+
+# cc_port_used = {
+#     0   : 0,
+#     1   : 0,
+#     2   : 0,
+#     3   : 0,
+#     4   : 0,
+#     257 : 0,
+#     258 : 0,
+#     259 : 0,
+#     260 : 0,
+#     513 : 0,
+#     514 : 0,
+#     515 : 0,
+#     516 : 0,
+#     769 : 0,
+#     770 : 0,
+#     771 : 0,
+#     772 : 0
+# }
 
 def flow_mod(switch, msg, rawmsg):
     """
@@ -246,6 +268,28 @@ def flow_mod(switch, msg, rawmsg):
     @param msg The parsed message object of type flow_mod
     @param rawmsg The actual packet received as a string
     """
+
+    if msg.command == ofp.OFPFC_ADD : 
+        if msg.out_port in switch.ports.keys() and msg.match.in_port in switch.ports.keys() :
+            cc_label = switch.ports[msg.match.in_port].name + '_' + switch.ports[msg.out_port].name + '_' + str(msg.match.dl_vlan)
+            print "LABEL = " + cc_label
+            DataBaseP.writeToConfd('127.0.0.1', 2022, 'admin', 'admin', cc_label, 
+              str(msg.match.dl_vlan) , 
+              switch.ports[msg.match.in_port].name, 
+              switch.ports[msg.out_port].name)
+            
+
+    elif msg.command == ofp.OFPFC_DELETE or \
+       msg.command == ofp.OFPFC_DELETE_STRICT :
+        if msg.out_port in switch.ports.keys() and msg.match.in_port in switch.ports.keys() :
+            cc_label = switch.ports[msg.match.in_port].name + '_' + switch.ports[msg.out_port].name + '_' + str(msg.match.dl_vlan)
+            print "LABEL = " + cc_label
+            DataBaseP.deleteFromConfd('127.0.0.1', 2022, 'admin', 'admin', cc_label, 
+              str(msg.match.dl_vlan) , 
+              switch.ports[msg.match.in_port].name, 
+              switch.ports[msg.out_port].name)
+            
+
 
     # if msg.out_port in port_to_name_map.keys() and  msg.match.in_port in port_to_name_map.keys()  \
     #    and cc_port_used[msg.out_port] == 0 and  cc_port_used[msg.match.in_port] == 0 :
@@ -260,11 +304,11 @@ def flow_mod(switch, msg, rawmsg):
 
     # else :
     #     print "what?"
-    (rv, err_msg) = switch.pipeline.flow_mod_process(msg, switch.groups)
-    switch.logger.debug("Handled flow_mod, result: " + str(rv) + ", " +
-                        "None" if err_msg is None else err_msg.__class__.__name__)
-    if rv !=  0:
-        switch.controller.message_send(err_msg)
+    # (rv, err_msg) = switch.pipeline.flow_mod_process(msg, switch.groups)
+    # switch.logger.debug("Handled flow_mod, result: " + str(rv) + ", " +
+    #                     "None" if err_msg is None else err_msg.__class__.__name__)
+    # if rv !=  0:
+    #     switch.controller.message_send(err_msg)
 
 def flow_mod_failed_error_msg(switch, msg, rawmsg):
     """
@@ -302,15 +346,13 @@ def flow_stats_request(switch, msg, rawmsg):
     """
     ns1 = "http://cpqd.com.br/chassis/system"
     ns2 = "http://cpqd.com.br/roadm/system"
-    # ns3 = 
-    # datafilter = ("xpath","/{{{0}}}config/{{{0}}}system/{{{1}}}roadm".format(ns1 , ns2))
+    
     datafilter = ("xpath","/config/system/roadm/cross-connections")
     config = DataBaseP.readFromConfd('127.0.0.1', 2022, 'admin', 'admin',  datafilter)
     root = et.fromstring(config)
-    # print "ROOT == " + root
 
-    inp = port_to_name_map[msg.match.in_port]
-    outp = port_to_name_map[msg.out_port]
+    inp = switch.ports[msg.match.in_port].name
+    outp = switch.ports[msg.out_port].name
     channel = str(msg.match.dl_vlan)
 
     replies = []

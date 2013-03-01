@@ -5,7 +5,9 @@ Created on Jan 24, 2011
 '''
 import logging
 
-from oftest import cstruct as ofp, packet
+# from oftest import cstruct as ofp, packet
+import ofp
+import oftest.packet as packet
 from oftest import ofutils
 # from oftest.cstruct import OFPML_NONE
 

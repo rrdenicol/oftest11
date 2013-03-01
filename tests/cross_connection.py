@@ -7,8 +7,10 @@ Created on Jan 27, 2011
 import logging
 
 import basic
-import testutils
-from oftest import cstruct as ofp
+# import testutils
+import oftest.testutils as testutils
+# from oftest import cstruct as ofp
+import ofp
 
 ETHERTYPE_VLAN = 0x8100
 
@@ -29,31 +31,27 @@ def test_set_init(config):
     cross_connection_config = config
 
 name_to_port_map = {
-    'D1-ADD' : 1,
-    'D2-ADD' : 2,
-    'D3-ADD' : 3,
-    'D4-ADD' : 4,
-    'D1-DROP': 257,
-    'D2-DROP': 258,
-    'D3-DROP': 259,
-    'D4-DROP': 260,
-    'D1-IN'  : 513,
-    'D2-IN'  : 514,
-    'D3-IN'  : 515,
-    'D4-IN'  : 516,
-    'D1-OUT' : 769,
-    'D2-OUT' : 770,
-    'D3-OUT' : 771,
-    'D4-OUT' : 772
+    'D1-ADD' : 0,
+    'D2-ADD' : 1,
+    'D3-ADD' : 2,
+    'D4-ADD' : 3,
+    'D1-DROP': 4,
+    'D2-DROP': 5,
+    'D3-DROP': 6,
+    'D4-DROP': 7,
+    'D1-IN'  : 8,
+    'D2-IN'  : 9,
+    'D3-IN'  : 10,
+    'D4-IN'  : 11,
+    'D1-OUT' : 12,
+    'D2-OUT' : 13,
+    'D3-OUT' : 14,
+    'D4-OUT' : 15
 }
 
 class FlowModAdd(basic.SimpleProtocol):
-    """ Simple FlowMod Modify test
-    delete all flows in the table
-    insert an exact match flow_mod sending to port[1]
-    then swap the output action from port[1] to port[2]
-    then get flow_stats
-    assert that the new actions are in place
+    """ 
+    Simple FlowMod Add test
     """
     def runTest(self):
         # ing_port = cross_connection_port_map.keys()[0]
@@ -70,7 +68,7 @@ class FlowModAdd(basic.SimpleProtocol):
         match_fm.dl_vlan = 1
         fm_orig = testutils.flow_msg_create(self, pkt, match=match_fm,
                                             ing_port=ing_port, 
-                                            egr_port=out_port)
+                                            egr_ports=out_port)
         # fm_new = testutils.flow_msg_create(self, match_fm,
         #                                     ing_port=ing_port, 
         #                                     egr_port=out_port2)
@@ -78,16 +76,37 @@ class FlowModAdd(basic.SimpleProtocol):
         rv = self.controller.message_send(fm_orig)
         self.assertEqual(rv, 0, "Failed to insert 1st flow_mod")
         testutils.do_barrier(self.controller)
-        # rv = self.controller.message_send(fm_new)
+
+
+
+class FlowModDel(basic.SimpleProtocol):
+    """ 
+    Simple FlowMod delete test
+    """
+    def runTest(self):
+        ing_port = name_to_port_map['D1-ADD']
+        out_port = name_to_port_map['D4-OUT']
+        print "ing_port  = "  + str(ing_port)
+        print "out_port  = "  + str(out_port)
+        pkt = testutils.simple_tcp_packet()
+        match_fm = ofp.ofp_match()
+        match_fm.in_port = ing_port
+        match_fm.dl_type = ETHERTYPE_VLAN
+        match_fm.dl_vlan = 1
+        fm_orig = testutils.flow_msg_create(self, pkt, match=match_fm,
+                                            ing_port=ing_port, 
+                                            egr_ports=out_port)
+        fm_delete = testutils.flow_msg_create(self, pkt, match=match_fm,
+                                            ing_port=ing_port, 
+                                            egr_ports=out_port)
+        fm_delete.command = ofp.OFPFC_DELETE
+        rv = self.controller.message_send(fm_orig)
+        self.assertEqual(rv, 0, "Failed to insert 1st flow_mod")
+        rv = self.controller.message_send(fm_delete)
+        self.assertEqual(rv, 0, "Failed to insert 1st flow_mod")
+
         # testutils.do_barrier(self.controller)
-        # self.assertEqual(rv, 0, "Failed to insert 2nd flow_mod")
-        # flow_stats = testutils.flow_stats_get(self)
-        # self.assertEqual(len(flow_stats.stats),1, 
-        #                  "Expected only one flow_mod")
-        # stat = flow_stats.stats[0]
-        # self.assertEqual(stat.match, fm_new.match)
-        # self.assertEqual(stat.instructions, fm_new.instructions)
-        # @todo consider adding more tests here
+
         
 class FlowStatsGet(basic.SimpleProtocol):
     """

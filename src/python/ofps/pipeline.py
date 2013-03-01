@@ -35,8 +35,10 @@ from flowtable import FlowTable
 from threading import Thread
 from exec_actions import execute_actions
 from exec_actions import packet_in_to_controller
-import oftest.cstruct as ofp
-import oftest.message as message 
+# import oftest.cstruct as ofp
+# import oftest.message as message 
+import ofp
+import ofp.message as message
 # import oftest.instruction as instruction
 from oftest import ofutils
 import validate

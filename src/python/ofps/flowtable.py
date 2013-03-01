@@ -32,8 +32,9 @@ The FlowTable class definition
 import logging
 import flow as ofps_flow
 from threading import Lock
-import oftest.cstruct as ofp
-import oftest.message as message
+# import oftest.cstruct as ofp
+import ofp
+import ofp.message as message
 
 def prio_sort(entry_x, entry_y):
     """

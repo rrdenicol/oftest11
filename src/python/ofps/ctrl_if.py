@@ -41,9 +41,10 @@ import threading
 import logging
 
 
-import oftest.message as message
-import oftest.parse as parse
-import oftest.cstruct as ofp
+import ofp
+import ofp.message as message
+import ofp.parse as parse
+# import oftest.cstruct as ofp
 import oftest.ofutils as ofutils
 
 # For some reason, it seems select to be last (or later).
@@ -398,7 +399,7 @@ class ControllerInterface(threading.Thread):
         Stop the dataplane thread.
         """
         self.killed = True
-        self.waker.notify()
+    #     self.waker.notify()
         self.join()
         
     def __str__(self):

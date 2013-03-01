@@ -48,10 +48,11 @@ import pdb
 import time
 
 
-import oftest.cstruct as ofp
+# import oftest.cstruct as ofp
+import ofp
 import oftest.dataplane as dataplane
-import oftest.message as message
-import oftest.action as action
+# import oftest.message as message
+# import oftest.action as action
 from ctrl_if import ControllerInterface
 from oftest.packet import Packet
 from pipeline import FlowPipeline

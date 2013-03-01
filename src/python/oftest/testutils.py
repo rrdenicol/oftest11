@@ -16,10 +16,11 @@ except:
 import oftest
 import oftest.controller
 import oftest.dataplane
-import cstruct
-import message
-import action
-import parse
+# import cstruct
+import ofp
+import ofp.message as message
+import ofp.action as action
+import ofp.parse as parse
 
 global skipped_test_count
 skipped_test_count = 0
@@ -41,9 +42,9 @@ def delete_all_flows(ctrl):
 
     logging.info("Deleting all flows")
     msg = message.flow_mod()
-    msg.match.wildcards = cstruct.OFPFW_ALL
-    msg.out_port = cstruct.OFPP_NONE
-    msg.command = cstruct.OFPFC_DELETE
+    msg.match.wildcards = ofp.OFPFW_ALL
+    msg.out_port = ofp.OFPP_NONE
+    msg.command = ofp.OFPFC_DELETE
     msg.buffer_id = 0xffffffff
     ctrl.message_send(msg)
     return 0 # for backwards compatibility
@@ -51,8 +52,8 @@ def delete_all_flows(ctrl):
 def required_wildcards(parent):
     w = test_param_get('required_wildcards', default='default')
     if w == 'l3-l4':
-        return (cstruct.OFPFW_NW_SRC_ALL | cstruct.OFPFW_NW_DST_ALL | cstruct.OFPFW_NW_TOS
-                | cstruct.OFPFW_NW_PROTO | cstruct.OFPFW_TP_SRC | cstruct.OFPFW_TP_DST)
+        return (ofp.OFPFW_NW_SRC_ALL | ofp.OFPFW_NW_DST_ALL | ofp.OFPFW_NW_TOS
+                | ofp.OFPFW_NW_PROTO | ofp.OFPFW_TP_SRC | ofp.OFPFW_TP_DST)
     else:
         return 0
 
@@ -424,7 +425,7 @@ def receive_pkt_verify(parent, egr_ports, exp_pkt, ing_port):
     # Expect a packet from each port on egr port list
     for egr_port in egr_port_list:
         check_port = egr_port
-        if egr_port == cstruct.OFPP_IN_PORT:
+        if egr_port == ofp.OFPP_IN_PORT:
             check_port = ing_port
         (rcv_port, rcv_pkt, pkt_time) = parent.dataplane.poll(
             port_number=check_port, exp_pkt=exp_pkt_arg)
@@ -480,7 +481,7 @@ def match_verify(parent, req_match, res_match):
                        'Match failed: dl_type: ' + str(req_match.dl_type) +
                        " != " + str(res_match.dl_type))
 
-    if (not(req_match.wildcards & cstruct.OFPFW_DL_TYPE)
+    if (not(req_match.wildcards & ofp.OFPFW_DL_TYPE)
         and (req_match.dl_type == IP_ETHERTYPE)):
         parent.assertEqual(req_match.nw_tos, res_match.nw_tos,
                            'Match failed: nw_tos: ' + str(req_match.nw_tos) +
@@ -495,7 +496,7 @@ def match_verify(parent, req_match, res_match):
                            'Match failed: nw_dst: ' + str(req_match.nw_dst) +
                            " != " + str(res_match.nw_dst))
 
-        if (not(req_match.wildcards & cstruct.OFPFW_NW_PROTO)
+        if (not(req_match.wildcards & ofp.OFPFW_NW_PROTO)
             and ((req_match.nw_proto == TCP_PROTOCOL)
                  or (req_match.nw_proto == UDP_PROTOCOL))):
             parent.assertEqual(req_match.tp_src, res_match.tp_src,
@@ -512,7 +513,7 @@ def packet_to_flow_match(parent, packet):
     match.wildcards |= required_wildcards(parent)
     return match
 
-def flow_msg_create(parent, pkt, ing_port=None, action_list=None, wildcards=None,
+def flow_msg_create(parent, pkt, match=None, ing_port=None, action_list=None, wildcards=None,
                egr_ports=None, egr_queue=None, check_expire=False, in_band=False):
     """
     Create a flow message
@@ -523,12 +524,13 @@ def flow_msg_create(parent, pkt, ing_port=None, action_list=None, wildcards=None
     @param in_band if True, do not wildcard ingress port
     @param egr_ports None (drop), single port or list of ports
     """
-    match = parse.packet_to_flow_match(pkt)
+    if match is None :
+        match = parse.packet_to_flow_match(pkt)
     parent.assertTrue(match is not None, "Flow match from pkt failed")
     if wildcards is None:
         wildcards = required_wildcards(parent)
     if in_band:
-        wildcards &= ~cstruct.OFPFW_IN_PORT
+        wildcards &= ~ofp.OFPFW_IN_PORT
     match.wildcards = wildcards
     match.in_port = ing_port
 
@@ -541,7 +543,7 @@ def flow_msg_create(parent, pkt, ing_port=None, action_list=None, wildcards=None
     request.match = match
     request.buffer_id = 0xffffffff
     if check_expire:
-        request.flags |= cstruct.OFPFF_SEND_FLOW_REM
+        request.flags |= ofp.OFPFF_SEND_FLOW_REM
         request.hard_timeout = 1
 
     if action_list is not None:
@@ -558,10 +560,12 @@ def flow_msg_create(parent, pkt, ing_port=None, action_list=None, wildcards=None
             act.queue_id = egr_queue
             request.actions.add(act)
     elif egr_ports is not None:
+        if type(egr_ports) != type([]) :
+            request.out_port = egr_ports
         for egr_port in egr_port_list:
-            act = action.action_output()
-            act.port = egr_port
-            request.actions.add(act)
+                act = action.action_output()
+                act.port = egr_port
+                request.actions.add(act)
 
     logging.debug(request.show())
 
@@ -713,7 +717,7 @@ def flow_match_test(parent, port_map, wildcards=None, dl_vlan=-1, pkt=None,
         egr_ports = get_egr_list(parent, of_ports, egr_count, 
                                  exclude_list=[ingress_port])
         if ing_port:
-            egr_ports.append(cstruct.OFPP_IN_PORT)
+            egr_ports.append(ofp.OFPP_IN_PORT)
         if len(egr_ports) == 0:
             parent.assertTrue(0, "Failed to generate egress port list")
 
@@ -733,7 +737,7 @@ def flow_match_test(parent, port_map, wildcards=None, dl_vlan=-1, pkt=None,
     egr_ports = get_egr_list(parent, of_ports, egr_count,
                              exclude_list=[ingress_port])
     if ing_port:
-        egr_ports.append(cstruct.OFPP_IN_PORT)
+        egr_ports.append(ofp.OFPP_IN_PORT)
     flow_match_test_pktout(parent, ingress_port, egr_ports,
                            dl_vlan=dl_vlan,
                            pkt=pkt, exp_pkt=exp_pkt,
@@ -933,9 +937,9 @@ def pkt_action_setup(parent, start_field_vals={}, mod_field_vals={},
 # If in_band is true, then only drop from first test port
 def flow_mod_gen(port_map, in_band):
     request = message.flow_mod()
-    request.match.wildcards = cstruct.OFPFW_ALL
+    request.match.wildcards = ofp.OFPFW_ALL
     if in_band:
-        request.match.wildcards = cstruct.OFPFW_ALL - cstruct.OFPFW_IN_PORT
+        request.match.wildcards = ofp.OFPFW_ALL - ofp.OFPFW_IN_PORT
         for of_port, ifname in port_map.items(): # Grab first port
             break
         request.match.in_port = of_port
@@ -966,10 +970,10 @@ def all_stats_get(parent):
     lookups, matched
     """
     stat_req = message.aggregate_stats_request()
-    stat_req.match = cstruct.ofp_match()
-    stat_req.match.wildcards = cstruct.OFPFW_ALL
+    stat_req.match = ofp.ofp_match()
+    stat_req.match.wildcards = ofp.OFPFW_ALL
     stat_req.table_id = 0xff
-    stat_req.out_port = cstruct.OFPP_NONE
+    stat_req.out_port = ofp.OFPP_NONE
 
     rv = {}
 

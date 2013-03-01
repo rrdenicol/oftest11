@@ -36,12 +36,13 @@ packet modifications.
 import socket
 import struct
 import logging
-import oftest.cstruct as ofp
+# import oftest.cstruct as ofp
+import ofp
 import unittest
 import binascii
 import string
 import collections #@UnresolvedImport
-import oftest.action as action
+# import oftest.action as action
 #Import scappy packet generator
 try:
     import scapy.all as scapy

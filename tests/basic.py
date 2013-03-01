@@ -20,11 +20,13 @@ import logging
 
 import unittest
 
+import ofp
 import oftest.controller as controller
-import oftest.cstruct as ofp
-import oftest.message as message
+
+# import oftest.cstruct as ofp
+# import oftest.message as message
 import oftest.dataplane as dataplane
-import oftest.action as action
+# import oftest.action as action
 
 import testutils
 
@@ -171,7 +173,7 @@ class EchoWithData(SimpleProtocol):
     Test echo response with short string data
     """
     def runTest(self):
-        request = message.echo_request()
+        request = ofp.message.echo_request()
         request.data = 'OpenFlow Will Rule The World'
         response, _ = self.controller.transact(request)
         self.assertEqual(response.header.type, ofp.OFPT_ECHO_REPLY,
@@ -188,7 +190,7 @@ class FeaturesRequest(SimpleProtocol):
     Does NOT test the contents; just that we get a response
     """
     def runTest(self):
-        request = message.features_request()
+        request = ofp.message.features_request()
         response,_ = self.controller.transact(request)
         self.assertTrue(response,"Got no features_reply to features_request")
         self.assertEqual(response.header.type, ofp.OFPT_FEATURES_REPLY,
@@ -251,10 +253,10 @@ class PacketOut(SimpleDataPlane):
         of_ports = basic_port_map.keys()
         of_ports.sort()
         for dp_port in of_ports:
-            msg = message.packet_out()
+            msg = ofp.message.packet_out()
             msg.in_port = ofp.OFPP_CONTROLLER
             msg.data = str(outpkt)
-            act = action.action_output()
+            act = ofp.action.action_output()
             act.port = dp_port
             self.assertTrue(msg.actions.add(act), 'Could not add action to msg')
 
@@ -282,7 +284,7 @@ class FlowRemoveAll(SimpleProtocol):
     def runTest(self):
         basic_logger.info("Running StatsGet")
         basic_logger.info("Inserting trial flow")
-        request = message.flow_mod()
+        request = ofp.message.flow_mod()
         request.match.wildcards = ofp.OFPFW_ALL
         request.buffer_id = 0xffffffff
         for i in range(1,5):
@@ -293,14 +295,14 @@ class FlowRemoveAll(SimpleProtocol):
         basic_logger.info("Removing all flows")
         testutils.delete_all_flows(self.controller, basic_logger)
         basic_logger.info("Sending flow request")
-        request = message.flow_stats_request()
+        request = ofp.message.flow_stats_request()
         request.out_port = ofp.OFPP_ANY
         request.out_group = ofp.OFPG_ANY
         request.table_id = 0xff
         request.match.wildcards = 0 # ofp.OFPFW_ALL
         response, _ = self.controller.transact(request, timeout=2)
         self.assertTrue(response is not None, "Did not get response")
-        self.assertTrue(isinstance(response,message.flow_stats_reply),"Not a flow_stats_reply")
+        self.assertTrue(isinstance(response,ofp.message.flow_stats_reply),"Not a flow_stats_reply")
         self.assertEqual(len(response.stats),0)
         basic_logger.debug(response.show())
         
@@ -315,7 +317,7 @@ class FlowStatsGet(SimpleProtocol):
     def runTest(self):
         basic_logger.info("Running StatsGet")
         basic_logger.info("Inserting trial flow")
-        request = message.flow_mod()
+        request = ofp.message.flow_mod()
         request.match.wildcards = ofp.OFPFW_ALL
         request.buffer_id = 0xffffffff
         rv = self.controller.message_send(request)
@@ -335,7 +337,7 @@ class TableStatsGet(SimpleProtocol):
     def runTest(self):
         basic_logger.info("Running TableStatsGet")
         basic_logger.info("Sending table stats request")
-        request = message.table_stats_request()
+        request = ofp.message.table_stats_request()
         response, _ = self.controller.transact(request, timeout=2)
         self.assertTrue(response is not None, "Did not get response")
         basic_logger.debug(response.show())
@@ -349,7 +351,7 @@ class FlowMod(SimpleProtocol):
 
     def runTest(self):
         basic_logger.info("Running " + str(self))
-        request = message.flow_mod()
+        request = ofp.message.flow_mod()
         request.match.wildcards = ofp.OFPFW_ALL
         request.buffer_id = 0xffffffff
         rv = self.controller.message_send(request)
@@ -403,7 +405,7 @@ class TableModConfig(SimpleProtocol):
     """        
     def runTest(self):
         basic_logger.info("Running " + str(self))
-        table_mod = message.table_mod()
+        table_mod = ofp.message.table_mod()
         table_mod.table_id = 0 # first table should always exist
         table_mod.config = ofp.OFPTC_TABLE_MISS_CONTROLLER
         

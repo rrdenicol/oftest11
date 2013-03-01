@@ -31,8 +31,9 @@ The implementation of the basic abstraction of an entry in a flow
 table.
 """
 
-import oftest.cstruct as ofp
-import oftest.message as message
+# import oftest.cstruct as ofp
+import ofp
+import ofp.message as message
 # import oftest.instruction as instruction
 import copy
 import time

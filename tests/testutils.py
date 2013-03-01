@@ -4,12 +4,17 @@ import logging
 #import types
 
 #import oftest.controller as controller
-from oftest import cstruct as ofp
-import oftest.message as message
+# from oftest import cstruct as ofp
+import ofp
+
+# import oftest.message as message
+import ofp.message as message
 #import oftest.dataplane as dataplane
-import oftest.action as action
-import oftest.parse as parse
-from oftest import instruction
+# import oftest.action as action
+import ofp.action as action
+import ofp.parse as parse
+# import oftest.parse as parse
+# from oftest import instruction
 from oftest.packet import Packet
 
 global skipped_test_count
@@ -690,10 +695,10 @@ def flow_match_test(parent, port_map, match=None, wildcards=0,
                 return
 
 def flow_match_test_port_pair_vlan(parent, ing_port, egr_port, wildcards=0,
-                                   dl_vlan=ofp.OFPVID_NONE, dl_vlan_pcp=0,
+                                   dl_vlan=0, dl_vlan_pcp=0,
                                    dl_vlan_type=ETHERTYPE_VLAN,
                                    dl_vlan_int=-1, dl_vlan_pcp_int=0,
-                                   vid_match=ofp.OFPVID_NONE, pcp_match=0,
+                                   vid_match=0, pcp_match=0,
                                    exp_vid=-1, exp_pcp=0,
                                    exp_vlan_type=ETHERTYPE_VLAN,
                                    match_exp=True,
@@ -715,8 +720,8 @@ def flow_match_test_port_pair_vlan(parent, ing_port, egr_port, wildcards=0,
     len_w_vid = len + 4
 
     if pkt is None:
-        if dl_vlan >= 0 and dl_vlan != ofp.OFPVID_NONE:
-            if dl_vlan_int >= 0 and dl_vlan_int != ofp.OFPVID_NONE:
+        if dl_vlan >= 0 and dl_vlan != 0:
+            if dl_vlan_int >= 0 and dl_vlan_int != 0:
                 pkt = simple_tcp_packet(pktlen=len_w_vid,
                         dl_vlan_enable=True,
                         dl_vlan=dl_vlan_int,
@@ -735,10 +740,10 @@ def flow_match_test_port_pair_vlan(parent, ing_port, egr_port, wildcards=0,
                                     dl_vlan_enable=False)
 
     if exp_pkt is None:
-        if exp_vid >= 0 and exp_vid != ofp.OFPVID_NONE:
+        if exp_vid >= 0 and exp_vid != 0:
             if add_tag_exp:
-                if dl_vlan >= 0 and dl_vlan != ofp.OFPVID_NONE:
-                    if dl_vlan_int >= 0 and dl_vlan_int != ofp.OFPVID_NONE:
+                if dl_vlan >= 0 and dl_vlan != 0:
+                    if dl_vlan_int >= 0 and dl_vlan_int != 0:
                         exp_pkt = simple_tcp_packet(pktlen=len_w_vid,
                                     dl_vlan_enable=True,
                                     dl_vlan=dl_vlan_int,
@@ -826,9 +831,9 @@ def flow_match_test_port_pair_vlan(parent, ing_port, egr_port, wildcards=0,
         parent.assertFalse(rcv_pkt is not None, "Packet on dataplane")
 
 def flow_match_test_vlan(parent, port_map, wildcards=0,
-                         dl_vlan=ofp.OFPVID_NONE, dl_vlan_pcp=0, dl_vlan_type=ETHERTYPE_VLAN,
+                         dl_vlan=0, dl_vlan_pcp=0, dl_vlan_type=ETHERTYPE_VLAN,
                          dl_vlan_int=-1, dl_vlan_pcp_int=0,
-                         vid_match=ofp.OFPVID_NONE, pcp_match=0,
+                         vid_match=0, pcp_match=0,
                          exp_vid=-1, exp_pcp=0,
                          exp_vlan_type=ETHERTYPE_VLAN,
                          match_exp=True,
