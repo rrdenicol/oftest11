@@ -961,6 +961,32 @@ def skip_message_emit(parent, s):
     else:
         sys.stderr.write("(S)")
 
+def match_all_generate():
+    match = ofp.ofp_match()
+    match.length = ofp.OFP_MATCH_BYTES
+    match.wildcards = ofp.OFPFW_ALL
+    match.dl_src_mask = [255,255,255,255,255,255]
+    match.dl_dst_mask = [255,255,255,255,255,255]
+    match.nw_src_mask = int(0xffffffff)
+    match.nw_dst_mask = int(0xffffffff)
+    return match
+
+def flow_stats_get(parent, match=None):
+    """ Get the flow_stats from the switch
+    Test the response to make sure it's really a flow_stats object
+    """
+    request = message.flow_stats_request()
+    request.out_port = ofp.OFPP_ALL
+    # request.out_group = ofp.OFPG_ANY
+    request.table_id = 0xff
+    if match is None:
+        match = match_all_generate()
+    request.match = match
+    response, _ = parent.controller.transact(request, timeout=2)
+    parent.assertTrue(response is not None, "Did not get response")
+    parent.assertTrue(isinstance(response,message.flow_stats_reply),
+                      "Expected a flow_stats_reply, but didn't get it")
+    return response
 
 def all_stats_get(parent):
     """

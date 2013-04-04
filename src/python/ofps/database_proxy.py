@@ -47,7 +47,10 @@ def getAllPorts(host, port, user, passwd):
     config = readFromConfd(host, port, user, passwd, datafilter)
     root = et.fromstring(config)
     all_ports = {}
-    j = 0
+    name_to_port = {}
+    j = 1
+    all_ports[0] = '0'
+    name_to_port['0'] = 0
     for k in root.iter(getFullInterfaceName('interface')):
         name = ''
         _type = ''
@@ -58,11 +61,42 @@ def getAllPorts(host, port, user, passwd):
             _type = i.text
 
         all_ports[j] = name
+        name_to_port[name] = j
         # print "pairing of_port_no = " + str(j) + "  |  name = " + name
         j+=1
 
-    return all_ports
+    all_ports[ofp.OFPP_ALL] = 'OFPP_ALL'
+    name_to_port['OFPP_ALL'] = ofp.OFPP_ALL
 
+    return all_ports , name_to_port
+
+def getFlowStats(host, port, user, passwd):
+    datafilter = ("xpath","/config/system/roadm/cross-connections")
+    config = readFromConfd(host, port, user, passwd,  datafilter)
+    root = et.fromstring(config)
+
+    inp = switch.ports[msg.match.in_port].name
+    outp = switch.ports[msg.out_port].name
+    channel = str(msg.match.dl_vlan)
+
+    replies = []
+
+    for k in root.iter(getFullRoadmName('cross-connection')):
+        rin = ''
+        rout = ''
+        rch = ''
+        stats = []
+        for i in k.iter(getFullRoadmName('in')):
+            rin = i.text
+        for i in k.iter(getFullRoadmName('out')):
+            rout = i.text
+        for i in k.iter(getFullRoadmName('cc-channel')):
+            rch = i.text
+        
+        print 'checking:'
+        print "in: %s out: %s channel: %s" % (rin, rout, rch)
+        print 'against:'
+        print "in: %s out: %s channel: %s" % (inp, outp, channel)
 
 def getFullRoadmName(tag):
     return "{http://cpqd.com.br/drc/gso/ng/roadm/interface}%s" % (tag)

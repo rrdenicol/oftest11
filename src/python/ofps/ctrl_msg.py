@@ -190,76 +190,10 @@ def features_request(switch, msg, rawmsg):
 
 import database_proxy as DataBaseP
 import xml.etree.ElementTree as et
-# def getFullNcsName(tag):
-#     return "{http://cpqd.com.br/drc/gso/ng/ncs/interface}%s" % (tag)
-
-def getFullRoadmName(tag):
-    return "{http://cpqd.com.br/roadm/system}%s" % (tag)
-
-port_to_name_map = {
-    0   : '0',
-    1   : 'D1-ADD',
-    2   : 'D2-ADD',
-    3   : 'D3-ADD',
-    4   : 'D4-ADD',
-    257 : 'D1-DROP',
-    258 : 'D2-DROP',
-    259 : 'D3-DROP',
-    260 : 'D4-DROP',
-    513 : 'D1-IN',
-    514 : 'D2-IN',
-    515 : 'D3-IN',
-    516 : 'D4-IN',
-    769 : 'D1-OUT',
-    770 : 'D2-OUT',
-    771 : 'D3-OUT',
-    772 : 'D4-OUT',
-    ofp.OFPP_ALL : 'ALL'
-}
 
 cc_instance_map = {
     
 }
-
-cc_port_used = {
-    0   : 0,
-    1   : 0,
-    2   : 0,
-    3   : 0,
-    4   : 0,
-    5   : 0,
-    6   : 0,
-    7   : 0,
-    8   : 0,
-    9   : 0,
-    10  : 0,
-    11  : 0,
-    12  : 0,
-    13  : 0,
-    14  : 0,
-    15  : 0,
-    16  : 0
-}
-
-# cc_port_used = {
-#     0   : 0,
-#     1   : 0,
-#     2   : 0,
-#     3   : 0,
-#     4   : 0,
-#     257 : 0,
-#     258 : 0,
-#     259 : 0,
-#     260 : 0,
-#     513 : 0,
-#     514 : 0,
-#     515 : 0,
-#     516 : 0,
-#     769 : 0,
-#     770 : 0,
-#     771 : 0,
-#     772 : 0
-# }
 
 def flow_mod(switch, msg, rawmsg):
     """
@@ -303,7 +237,6 @@ def flow_mod(switch, msg, rawmsg):
     #     cc_port_used[msg.out_port] = 1
 
     # else :
-    #     print "what?"
     # (rv, err_msg) = switch.pipeline.flow_mod_process(msg, switch.groups)
     # switch.logger.debug("Handled flow_mod, result: " + str(rv) + ", " +
     #                     "None" if err_msg is None else err_msg.__class__.__name__)
@@ -344,8 +277,6 @@ def flow_stats_request(switch, msg, rawmsg):
     @param msg The parsed message object of type flow_stats_request
     @param rawmsg The actual packet received as a string
     """
-    ns1 = "http://cpqd.com.br/chassis/system"
-    ns2 = "http://cpqd.com.br/roadm/system"
     
     datafilter = ("xpath","/config/system/roadm/cross-connections")
     config = DataBaseP.readFromConfd('127.0.0.1', 2022, 'admin', 'admin',  datafilter)
@@ -357,35 +288,46 @@ def flow_stats_request(switch, msg, rawmsg):
 
     replies = []
 
-    for k in root.iter(getFullRoadmName('cross-connection')):
+    for k in root.iter(DataBaseP.getFullInterfaceName('cross-connection')):
         rin = ''
         rout = ''
         rch = ''
         stats = []
-        for i in k.iter(getFullRoadmName('in')):
+        for i in k.iter(DataBaseP.getFullInterfaceName('in')):
             rin = i.text
-        for i in k.iter(getFullRoadmName('out')):
+        for i in k.iter(DataBaseP.getFullInterfaceName('out')):
             rout = i.text
-        for i in k.iter(getFullRoadmName('cc-channel')):
+        for i in k.iter(DataBaseP.getFullInterfaceName('cc-channel')):
             rch = i.text
         
         print 'checking:'
         print "in: %s out: %s channel: %s" % (rin, rout, rch)
         print 'against:'
         print "in: %s out: %s channel: %s" % (inp, outp, channel)
-        if (rin == inp) & (rout == outp) & (rch == channel) :
-            print "FOUND" 
+        if (rin == inp) & (rout == outp or outp == switch.ports[ofp.OFPP_ALL].name) & (rch == channel) :
+            stat = message.flow_stats_entry()
+            stat.match.in_port = msg.match.in_port
+            stat.match.dl_vlan = msg.match.dl_vlan
+            output = action.output()
+            output.port = name_to_port[rout]
+            stat.actions.append(output)
 
-            print "DO whatever "
-            return
-        elif (inp == port_to_name_map[0] )& (outp == port_to_name_map[ofp.OFPP_ALL] )& (channel == '0' ):
+            replies.append(stat)
+
+        elif (inp == switch.ports[0].name or (msg.match.wildcards & ofp.OFPFW_IN_PORT == ofp.OFPFW_IN_PORT)) and (outp == switch.ports[ofp.OFPP_ALL].name) and (channel == '0' or msg.wildcards & ofp.OFPFW_DL_VLAN == ofp.OFPFW_DL_VLAN):
             print "Add response : "
             stat = message.flow_stats_entry()
-            # stat.match.in_port = 
 
+            stat.match.in_port = switch.name_to_port[rin]
+            stat.match.dl_vlan = int(rch)
+            output = ofp.action.output()
+            output.port = switch.name_to_port[rout]
+            stat.actions.add(output)
 
+            replies.append(stat)
+    
     reply = message.flow_stats_reply()
-    reply.header.xid = flow_stats_request.header.xid
+    reply.header.xid = msg.header.xid
     reply.stats = replies
     switch.logger.debug("Sending flow_stats_response to controller")    
     switch.controller.message_send(reply)

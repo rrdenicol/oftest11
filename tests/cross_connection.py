@@ -31,24 +31,58 @@ def test_set_init(config):
     cross_connection_config = config
 
 name_to_port_map = {
-    'D1-ADD' : 0,
-    'D2-ADD' : 1,
-    'D3-ADD' : 2,
-    'D4-ADD' : 3,
-    'D1-DROP': 4,
-    'D2-DROP': 5,
-    'D3-DROP': 6,
-    'D4-DROP': 7,
-    'D1-IN'  : 8,
-    'D2-IN'  : 9,
-    'D3-IN'  : 10,
-    'D4-IN'  : 11,
-    'D1-OUT' : 12,
-    'D2-OUT' : 13,
-    'D3-OUT' : 14,
-    'D4-OUT' : 15
+    '0' : 0,
+    'D1-ADD' : 1,
+    'D1-DROP': 2,
+    'D1-IN'  : 3,
+    'D1-OUT' : 4,
+    'D2-ADD' : 5,
+    'D2-DROP': 6,
+    'D2-IN'  : 7,
+    'D2-OUT' : 8,
+    'D3-ADD' : 9,
+    'D3-DROP': 10,
+    'D3-IN'  : 11,
+    'D3-OUT' : 12,
+    'D4-ADD' : 13,
+    'D4-DROP': 14,
+    'D4-IN'  : 15,
+    'D4-OUT' : 16
 }
-
+# name_to_port_map = {
+#     'D1-ADD' : 0,
+#     'D2-ADD' : 4,
+#     'D3-ADD' : 8,
+#     'D4-ADD' : 12,
+#     'D1-DROP': 1,
+#     'D2-DROP': 5,
+#     'D3-DROP': 9,
+#     'D4-DROP': 13,
+#     'D1-IN'  : 2,
+#     'D2-IN'  : 6,
+#     'D3-IN'  : 10,
+#     'D4-IN'  : 14,
+#     'D1-OUT' : 3,
+#     'D2-OUT' : 7,
+#     'D3-OUT' : 11,
+#     'D4-OUT' : 15 
+# }
+# # INFO:switch:Added port D1-ADD (ind=0) 
+# INFO:switch:Added port D1-DROP (ind=1) 
+# INFO:switch:Added port D1-IN (ind=2) 
+# INFO:switch:Added port D1-OUT (ind=3) 
+# INFO:switch:Added port D2-ADD (ind=4) 
+# INFO:switch:Added port D2-DROP (ind=5) 
+# INFO:switch:Added port D2-IN (ind=6) 
+# INFO:switch:Added port D2-OUT (ind=7) 
+# INFO:switch:Added port D3-ADD (ind=8) 
+# INFO:switch:Added port D3-DROP (ind=9) 
+# INFO:switch:Added port D3-IN (ind=10) 
+# INFO:switch:Added port D3-OUT (ind=11) 
+# INFO:switch:Added port D4-ADD (ind=12) 
+# INFO:switch:Added port D4-DROP (ind=13) 
+# INFO:switch:Added port D4-IN (ind=14) 
+# INFO:switch:Added port D4-OUT (ind=15) 
 class FlowModAdd(basic.SimpleProtocol):
     """ 
     Simple FlowMod Add test
@@ -117,8 +151,8 @@ class FlowStatsGet(basic.SimpleProtocol):
     def runTest(self):
         cross_connection_logger.info("Running StatsGet")
         cross_connection_logger.info("Inserting trial flow")
-        ing_port = name_to_port_map['D2-ADD']
-        out_port = name_to_port_map['D3-DROP']
+        ing_port = name_to_port_map['D1-ADD']
+        out_port = name_to_port_map['D4-DROP']
         print "ing_port  = "  + str(ing_port)
         print "out_port  = "  + str(out_port)
         pkt = testutils.simple_tcp_packet()
@@ -128,14 +162,17 @@ class FlowStatsGet(basic.SimpleProtocol):
         match_fm.dl_vlan = 1
         request = testutils.flow_msg_create(self, pkt, match=match_fm,
                                             ing_port=ing_port, 
-                                            egr_port=out_port)
+                                            egr_ports=out_port)
 
         rv = self.controller.message_send(request)
         self.assertTrue(rv != -1, "Failed to insert test flow")
         
         cross_connection_logger.info("Sending flow request")
         response = testutils.flow_stats_get(self)
+
+        # response = testutils.all_stats_get(self)
         cross_connection_logger.debug(response.show())
+        print response.show()
 
 
 if __name__ == "__main__":

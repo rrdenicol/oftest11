@@ -163,6 +163,7 @@ class OFSwitch(Thread):
         self.logger = logging.getLogger("switch")
         self.groups = GroupTable()
         self.ports = {}         # hash of ports[index]=ofp.ofp_phy_port
+        self.name_to_port = {}
     def config_set(self, config):
         """
         Set the configuration for the switch.
@@ -207,8 +208,10 @@ class OFSwitch(Thread):
         self.logger.info("Switch thread running")
         host = self.config.controller_ip
         # FUNCTION TO READ FROM THE DB ALL PORTS AVAILABLE
-        all_ports = DataBaseP.getAllPorts('127.0.0.1', 2022, 'admin', 'admin')
+        all_ports , self.name_to_port = DataBaseP.getAllPorts('127.0.0.1', 2022, 'admin', 'admin')
         print all_ports
+        print self.name_to_port
+        # self.name_to_port = name_to_port
 
         if self.config.passive_connect:
             host = None
